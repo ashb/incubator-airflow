@@ -788,7 +788,7 @@ class TaskInstance(Base, LoggingMixin):
         Index('ti_pool', pool, state, priority_weight),
     )
 
-    def __init__(self, task, execution_date, state=None):
+    def __init__(self, task, execution_date, state=None, raw=False):
         self.dag_id = task.dag_id
         self.task_id = task.task_id
         self.execution_date = execution_date
@@ -805,6 +805,9 @@ class TaskInstance(Base, LoggingMixin):
         self.hostname = ''
         self.init_on_load()
         self._log = logging.getLogger("airflow.task")
+        # Is this TaskInstance being currently running within `airflow run --raw`.
+        # Not persisted to the database so only valid for the current process
+        self.is_raw = raw
 
     @reconstructor
     def init_on_load(self):

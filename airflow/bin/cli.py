@@ -361,7 +361,7 @@ def run(args, dag=None):
         dag = dag_pickle.pickle
 
     task = dag.get_task(task_id=args.task_id)
-    ti = TaskInstance(task, args.execution_date)
+    ti = TaskInstance(task, args.execution_date, raw=args.raw)
     ti.refresh_from_db()
 
     log = logging.getLogger('airflow.task')
@@ -424,10 +424,6 @@ def run(args, dag=None):
                 pool=args.pool)
             executor.heartbeat()
             executor.end()
-
-    # Child processes should not flush or upload to remote
-    if args.raw:
-        return
 
     # Force the log to flush. The flush is important because we
     # might subsequently read from the log to insert into S3 or
