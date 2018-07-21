@@ -263,7 +263,7 @@ class DagBag(BaseDagBag, LoggingMixin):
         self.import_errors = {}
         self.has_logged = False
 
-        if include_examples:
+        if include_examples and not os.path.isfile(dag_folder):
             example_dag_folder = os.path.join(
                 os.path.dirname(__file__),
                 'example_dags')
@@ -1000,7 +1000,7 @@ class TaskInstance(Base, LoggingMixin):
         dag = self.task.dag
 
         should_pass_filepath = not pickle_id and dag
-        if should_pass_filepath and dag.full_filepath != dag.filepath:
+        if should_pass_filepath and False and dag.full_filepath != dag.filepath:
             path = "DAGS_FOLDER/{}".format(dag.filepath)
         elif should_pass_filepath and dag.full_filepath:
             path = dag.full_filepath

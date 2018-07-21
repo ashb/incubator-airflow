@@ -139,6 +139,13 @@ def process_subdir(subdir):
 
 
 def get_dag(args):
+    # Try to short circut by loading the filepath just from DB
+    orm = DagModel.get_current(args.dag_id)
+    dagbag = DagBag(orm.fileloc)
+    if args.dag_id in dagbag.dags:
+        return dagbag.dags[args.dag_id]
+
+    # Else fall back to the slower method of parsing all dags.
     dagbag = DagBag(process_subdir(args.subdir))
     if args.dag_id not in dagbag.dags:
         raise AirflowException(

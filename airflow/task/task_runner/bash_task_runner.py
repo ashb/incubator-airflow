@@ -21,6 +21,8 @@ import psutil
 
 from airflow.task.task_runner.base_task_runner import BaseTaskRunner
 from airflow.utils.helpers import reap_process_group
+import os
+import sys
 
 
 class BashTaskRunner(BaseTaskRunner):
@@ -31,10 +33,23 @@ class BashTaskRunner(BaseTaskRunner):
         super(BashTaskRunner, self).__init__(local_task_job)
 
     def start(self):
-        self.process = self.run_command(['bash', '-c'], join_args=True)
+        from airflow.bin.cli import CLIFactory
+        pid = os.fork()
+        if pid == 0:
+            parser = CLIFactory.get_parser()
+            args = parser.parse_args(self._command[1:])
+            args.func(args)
+            sys.exit(1)
+        else:
+            self.process = psutil.Process(pid)
+
+        #self.process = self.run_command(['bash', '-c'], join_args=True)
 
     def return_code(self):
-        return self.process.poll()
+        try:
+            return self.process.wait(timeout=10)
+        except psutil.TimeoutExpired:
+            return None
 
     def terminate(self):
         if self.process and psutil.pid_exists(self.process.pid):
