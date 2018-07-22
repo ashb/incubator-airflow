@@ -65,7 +65,6 @@ matrix:
       env: TOX_ENV=py27-backend_sqlite
     - python: "2.7"
       env: TOX_ENV=flake8
-    - python: "3.5"
 cache:
   directories:
     - $HOME/.wheelhouse/
