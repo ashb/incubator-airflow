@@ -1006,13 +1006,14 @@ def worker(args):
         sp.kill()
 
 
+@cli_utils.action_logging(creates_tables=True)
 def initdb(args):  # noqa
     print("DB: " + repr(settings.engine.url))
     db_utils.initdb(settings.RBAC)
     print("Done.")
 
 
-@cli_utils.action_logging
+@cli_utils.action_logging(creates_tables=True)
 def resetdb(args):
     print("DB: " + repr(settings.engine.url))
     if args.yes or input("This will drop existing tables "
@@ -1023,7 +1024,7 @@ def resetdb(args):
         print("Bail.")
 
 
-@cli_utils.action_logging
+@cli_utils.action_logging(creates_tables=True)
 def upgradedb(args):  # noqa
     print("DB: " + repr(settings.engine.url))
     db_utils.upgradedb()

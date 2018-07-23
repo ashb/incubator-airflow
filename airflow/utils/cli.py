@@ -34,7 +34,7 @@ import airflow.models
 from airflow.utils import cli_action_loggers
 
 
-def action_logging(f):
+def action_logging(f=None, creates_tables=False):
     """
     Decorates function to execute function at the same time submitting action_logging
     but in CLI context. It will call action logger callbacks twice,
@@ -55,6 +55,8 @@ def action_logging(f):
     :param f: function instance
     :return: wrapped function
     """
+    if not f:
+        return functools.partial(action_logging, creates_tables=creates_tables)
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         """
@@ -64,12 +66,23 @@ def action_logging(f):
         at 1st positional argument
         :param kwargs: A passthrough keyword argument
         """
+
         assert args
         assert isinstance(args[0], Namespace), \
             "1st positional argument should be argparse.Namespace instance, " \
             "but {}".format(args[0])
         metrics = _build_metrics(f.__name__, args[0])
-        cli_action_loggers.on_pre_execution(**metrics)
+
+        if creates_tables:
+            session = airflow.settings.Session()
+            # If this is an action that creates tables, and it doesn't exist
+            # yet, don't log at the start
+            engine = session.connection()
+            if engine.dialect.has_table(engine, airflow.models.Log.__tablename__):
+                cli_action_loggers.on_pre_execution(**metrics)
+        else:
+            cli_action_loggers.on_pre_execution(**metrics)
+
         try:
             return f(*args, **kwargs)
         except Exception as e:
