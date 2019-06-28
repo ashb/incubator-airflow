@@ -552,7 +552,7 @@
 ./tests/contrib/utils/test_mlengine_operator_utils.py
 ./tests/contrib/utils/test_sendgrid.py
 ./tests/contrib/utils/test_weekday.py
-./tests/core.py
+./tests/test_core.py
 ./tests/dags/test_cli_triggered_dags.py
 ./tests/dags/test_default_impersonation.py
 ./tests/dags/test_example_bash_operator.py
