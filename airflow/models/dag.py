@@ -37,13 +37,15 @@ from sqlalchemy import Column, String, Boolean, Integer, Text, func, or_
 
 from airflow import configuration, settings, utils
 from airflow.dag.base_dag import BaseDag
-from airflow.exceptions import AirflowException, AirflowDagCycleException
+from airflow.exceptions import AirflowException, AirflowDagCycleException, DagNotFound
 from airflow.executors import LocalExecutor, get_default_executor
 from airflow.models.base import Base, ID_LEN
 from airflow.models.dagbag import DagBag
 from airflow.models.dagpickle import DagPickle
 from airflow.models.dagrun import DagRun
 from airflow.models.taskinstance import TaskInstance, clear_task_instances
+from airflow.models.serialized_dag import SerializedDagModel
+from airflow.settings import DAGCACHED_ENABLED, DAGCACHED_MIN_UPDATE_INTERVAL
 from airflow.utils import timezone
 from airflow.utils.dates import cron_presets, date_range as utils_date_range
 from airflow.utils.db import provide_session
@@ -1319,6 +1321,12 @@ class DAG(BaseDag, LoggingMixin):
         for subdag in self.subdags:
             subdag.sync_to_db(owner=owner, sync_time=sync_time, session=session)
 
+        # Write DAGs to serialized_dag table in DB.
+        # subdags are not written into serialized_dag, because they are not displayed
+        # in the DAG list on UI. They are included in the serialized parent DAG.
+        if DAGCACHED_ENABLED and not self.is_subdag:
+            SerializedDagModel.write_dag(self, min_update_interval=DAGCACHED_MIN_UPDATE_INTERVAL)
+
     @staticmethod
     @provide_session
     def deactivate_unknown_dags(active_dag_ids, session=None):
@@ -1509,8 +1517,10 @@ class DagModel(Base):
     def safe_dag_id(self):
         return self.dag_id.replace('.', '__dot__')
 
-    def get_dag(self):
-        return DagBag(dag_folder=self.fileloc).get_dag(self.dag_id)
+    def get_dag(self, dagcached_enabled=False):
+        # Calling it from UI must set dagcached_enabled = DAGCACHED_ENABLED.
+        return DagBag(
+            dag_folder=self.fileloc, dagcached_enabled=dagcached_enabled).get_dag(self.dag_id)
 
     @provide_session
     def create_dagrun(self,
@@ -1551,6 +1561,7 @@ class DagModel(Base):
     def set_is_paused(self,
                       is_paused: bool,
                       including_subdags: bool = True,
+                      dagcached_enabled = False,
                       session=None) -> None:
         """
         Pause/Un-pause a DAG.
@@ -1561,7 +1572,10 @@ class DagModel(Base):
         """
         dag_ids = [self.dag_id]  # type: List[str]
         if including_subdags:
-            subdags = self.get_dag().subdags
+            dag = self.get_dag(dagcached_enabled)
+            if dag is None:
+                raise DagNotFound("Dag id {} not found".format(self.dag_id))
+            subdags = dag.subdags
             dag_ids.extend([subdag.dag_id for subdag in subdags])
         dag_models = session.query(DagModel).filter(DagModel.dag_id.in_(dag_ids)).all()
         try:
