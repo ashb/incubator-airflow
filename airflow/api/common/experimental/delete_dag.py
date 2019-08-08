@@ -21,7 +21,6 @@ import os
 
 from sqlalchemy import or_
 
-from airflow import configuration
 from airflow import models
 from airflow.models import TaskFail, DagModel, SerializedDagModel
 from airflow.utils.db import provide_session
