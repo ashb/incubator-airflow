@@ -116,6 +116,8 @@ class DagBag(BaseDagBag, LoggingMixin):
         """
         Gets the DAG out of the dictionary, and refreshes it if expired
 
+        :param dag_id: DAG Id
+        :type dag_id: str
         :param from_file_only: returns a DAG loaded from file.
         :type from_file_only: bool
         """
@@ -376,8 +378,7 @@ class DagBag(BaseDagBag, LoggingMixin):
             dag_folder=None,
             only_if_updated=True,
             include_examples=configuration.conf.getboolean('core', 'LOAD_EXAMPLES'),
-            safe_mode=configuration.conf.getboolean('core', 'DAG_DISCOVERY_SAFE_MODE'),
-            dagcached_enabled=False):
+            safe_mode=configuration.conf.getboolean('core', 'DAG_DISCOVERY_SAFE_MODE')):
         """
         Given a file path or a folder, this method looks for python modules,
         imports them and adds them to the dagbag collection.
