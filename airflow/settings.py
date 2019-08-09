@@ -313,7 +313,7 @@ CONTEXT_MANAGER_DAG = None
 
 # If dagcached is enabled, scheduler writes serialized DAGs to DB, and webserevr
 # reads DAGs from DB instead of importing from files.
-DAGCACHED_ENABLED = conf.getboolean('core', 'dagcached', fallback=True)
+DAGCACHED_ENABLED = conf.getboolean('core', 'dagcached', fallback=False)
 
 # Updating serialized DAG can not be faster than a minimum interval to reduce database
 # write rate.
