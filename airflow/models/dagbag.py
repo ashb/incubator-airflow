@@ -66,6 +66,9 @@ class DagBag(BaseDagBag, LoggingMixin):
         file has been skipped. This is to prevent overloading the user with logging
         messages about skipped files. Therefore only once per DagBag is a file logged
         being skipped.
+    :param dagcached_enabled: Read DAGs from DB if dagcached_enabled is ``True``.
+        If ``False`` DAGs are read from python files.
+    :type dagcached_enabled: bool
     """
 
     # static class variables to detetct dag cycle
