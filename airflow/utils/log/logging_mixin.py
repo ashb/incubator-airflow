@@ -22,7 +22,7 @@ import sys
 import warnings
 
 from contextlib import contextmanager
-from logging import Handler, StreamHandler
+from logging import Handler, StreamHandler, Logger
 
 
 class LoggingMixin:
@@ -35,7 +35,7 @@ class LoggingMixin:
     # We want to deprecate the logger property in Airflow 2.0
     # The log property is the de facto standard in most programming languages
     @property
-    def logger(self):
+    def logger(self) -> Logger:
         warnings.warn(
             'Initializing logger for {} using logger(), which will '
             'be replaced by .log in Airflow 2.0'.format(
@@ -46,7 +46,7 @@ class LoggingMixin:
         return self.log
 
     @property
-    def log(self):
+    def log(self) -> Logger:
         try:
             return self._log
         except AttributeError:
