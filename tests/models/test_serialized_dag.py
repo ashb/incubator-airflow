@@ -89,7 +89,7 @@ class SerializedDagModelTest(unittest.TestCase):
     def test_remove_dags(self):
         """DAGs can be removed from database."""
         example_dags_list = list(self._write_example_dags().values())
-
+        print("1", example_dags_list)
         # Tests removing by dag_id.
         dag_removed_by_id = example_dags_list[0]
         SDM.remove_dag(dag_removed_by_id.dag_id)
@@ -98,6 +98,9 @@ class SerializedDagModelTest(unittest.TestCase):
         # Tests removing by file path.
         dag_removed_by_file = example_dags_list[1]
         example_dag_files = list([dag.full_filepath for dag in example_dags_list])
+        print("2", dag_removed_by_file)
+        print("3", example_dag_files)
         example_dag_files.remove(dag_removed_by_file.full_filepath)
+        print("4", example_dag_files)
         SDM.remove_deleted_dags(example_dag_files)
         self.assertFalse(SDM.has_dag(dag_removed_by_file.dag_id))
