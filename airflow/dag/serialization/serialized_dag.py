@@ -67,7 +67,7 @@ class SerializedDAG(DAG, Serialization):
         return dag
 
     @classmethod
-    def to_json(cls, var: DAG) -> str:
+    def to_json(cls, var) -> str:
         """Stringifies DAGs and operators contained by var and returns a JSON string of var.
         """
         json_str = json.dumps(cls._serialize(var, {}), ensure_ascii=True)
