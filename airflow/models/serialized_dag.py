@@ -70,7 +70,7 @@ class SerializedDagModel(Base):
     )
 
     def __init__(self, dag):
-        from airflow.dag.serialization.serialized_dag import SerializedDAG
+        from airflow.dag.serialization.serialized_dag import SerializedDAG  # noqa: F811
 
         self.dag_id = dag.dag_id
         self.fileloc = dag.full_filepath
