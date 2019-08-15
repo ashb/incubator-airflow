@@ -79,7 +79,7 @@ class Serialization:
         """Validate json_str satisfies JSON schema."""
         if cls._json_schema is None:
             raise AirflowException('JSON schema of {:s} is not set.'.format(cls.__name__))
-        jsonschema.validate(json.loads(json_str), cls._json_schema)
+        cls._json_schema.validate(json.loads(json_str))
 
     @staticmethod
     def _encode(x, type_):

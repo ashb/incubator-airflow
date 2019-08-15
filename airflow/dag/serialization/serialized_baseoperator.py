@@ -20,7 +20,6 @@
 """Operator serialization with JSON."""
 
 from airflow.dag.serialization.enums import DagAttributeTypes as DAT
-from airflow.dag.serialization.json_schema import make_operator_schema
 from airflow.dag.serialization.serialization import Serialization
 from airflow.models import BaseOperator
 
@@ -33,8 +32,6 @@ class SerializedBaseOperator(BaseOperator, Serialization):
     """
     _included_fields = list(vars(BaseOperator(task_id='test')).keys()) + [
         '_dag', '_task_type', 'subdag', 'ui_color', 'ui_fgcolor', 'template_fields']
-
-    _json_schema = make_operator_schema()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

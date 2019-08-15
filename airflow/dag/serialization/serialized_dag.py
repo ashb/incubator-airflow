@@ -21,7 +21,7 @@
 import json
 
 from airflow.dag.serialization.enums import DagAttributeTypes as DAT, Encoding
-from airflow.dag.serialization.json_schema import make_dag_schema
+from airflow.dag.serialization.json_schema import load_dag_schema
 from airflow.dag.serialization.serialization import Serialization
 from airflow.models import DAG
 
@@ -42,7 +42,7 @@ class SerializedDAG(DAG, Serialization):
     # FIXME: to customize included fields and keep only necessary fields.
     _included_fields = list(vars(DAG(dag_id='test')).keys())
 
-    _json_schema = make_dag_schema()
+    _json_schema = load_dag_schema()
 
     @classmethod
     def serialize_dag(cls, dag: DAG, visited_dags: dict) -> dict:
