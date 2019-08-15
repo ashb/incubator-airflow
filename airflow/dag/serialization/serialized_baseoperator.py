@@ -31,7 +31,7 @@ class SerializedBaseOperator(BaseOperator, Serialization):
     Class specific attributes used by UI are move to object attributes.
     """
     _included_fields = list(vars(BaseOperator(task_id='test')).keys()) + [
-        '_dag', '_task_type', 'subdag', 'ui_color', 'ui_fgcolor', 'template_fields']
+        '_task_type', 'subdag', 'ui_color', 'ui_fgcolor', 'template_fields']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -57,20 +57,18 @@ class SerializedBaseOperator(BaseOperator, Serialization):
         self._task_type = task_type
 
     @classmethod
-    def serialize_operator(cls, op: BaseOperator, visited_dags: dict) -> dict:
+    def serialize_operator(cls, op: BaseOperator) -> dict:
         """Serializes operator into a JSON object.
         """
-        serialize_op = cls._serialize_object(
-            op, visited_dags, included_fields=cls._included_fields)
+        serialize_op = cls._serialize_object(op)
         # Adds a new task_type field to record the original operator class.
         serialize_op['_task_type'] = op.__class__.__name__
         return cls._encode(serialize_op, type_=DAT.OP)
 
     @classmethod
-    def deserialize_operator(cls, encoded_op: dict, visited_dags: dict) -> BaseOperator:
+    def deserialize_operator(cls, encoded_op: dict) -> BaseOperator:
         """Deserializes an operator from a JSON object.
         """
         op = SerializedBaseOperator(task_id=encoded_op['task_id'])
-        cls._deserialize_object(
-            encoded_op, op, cls._included_fields, visited_dags)
+        cls._deserialize_object(encoded_op, op)
         return op
