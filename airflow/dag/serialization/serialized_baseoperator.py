@@ -19,7 +19,7 @@
 
 """Operator serialization with JSON."""
 
-from airflow.dag.serialization.enums import DagAttributeTypes as DAT
+from airflow.dag.serialization.enums import DagAttributeTypes as DAT, Encoding
 from airflow.dag.serialization.serialization import Serialization
 from airflow.models import BaseOperator
 
@@ -63,6 +63,10 @@ class SerializedBaseOperator(BaseOperator, Serialization):
         serialize_op = cls._serialize_object(op)
         # Adds a new task_type field to record the original operator class.
         serialize_op['_task_type'] = op.__class__.__name__
+
+        if isinstance(op.template_fields, tuple):
+            # Don't store the template_fields as a tuple -- a list is simpler and does what we need
+            serialize_op['template_fields'] = serialize_op['template_fields'][Encoding.VAR]
         return cls._encode(serialize_op, type_=DAT.OP)
 
     @classmethod

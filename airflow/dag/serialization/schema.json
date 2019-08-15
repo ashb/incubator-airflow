@@ -190,30 +190,8 @@
             "ui_color": { "$ref": "#/definitions/color" },
             "ui_fgcolor": { "$ref": "#/definitions/color" },
             "template_fields": {
-              "oneOf": [
-                {
-                  "type": "array",
-                  "items": { "type": "string" }
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "__type": {
-                      "type": "string",
-                      "const": "tuple"
-                    },
-                    "__var": {
-                      "type": "array",
-                      "items": { "type": "string" }
-                    }
-                  },
-                  "required": [
-                    "__type",
-                    "__var"
-                  ],
-                  "additionalProperties": false
-                }
-              ]
+              "type": "array",
+              "items": { "type": "string" }
             },
             "subdag": { "$ref": "#/definitions/dag" },
             "_upstream_task_ids": { "$ref": "#/definitions/stringset" },
