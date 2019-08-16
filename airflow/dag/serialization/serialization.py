@@ -25,7 +25,6 @@ import logging
 from typing import Dict, Optional, TYPE_CHECKING, Union
 
 import dateutil.parser
-import jsonschema
 import pendulum
 
 import airflow
@@ -35,6 +34,7 @@ from airflow.models import BaseOperator, DAG
 from airflow.models.connection import Connection
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.www.utils import get_python_source
+from airflow.dag.serialization.json_schema import Validator
 
 
 if TYPE_CHECKING:
@@ -56,11 +56,14 @@ class Serialization:
     # Time types.
     _datetime_types = (datetime.datetime, datetime.date, datetime.time)
 
+    # Exactly these fields will be contained in the serialized Json
+    _included_fields = []
+
     # Object types that are always excluded in serialization.
     # FIXME: not needed if _included_fields of DAG and operator are customized.
     _excluded_types = (logging.Logger, Connection, type)
 
-    _json_schema = None     # type: Optional[Dict]
+    _json_schema = None     # type: Optional[Validator]
 
     @classmethod
     def to_json(cls, var: Union[DAG, BaseOperator, dict, list, set, tuple]) -> str:

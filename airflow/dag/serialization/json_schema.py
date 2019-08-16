@@ -22,10 +22,16 @@
 import json
 import jsonschema
 import pkgutil
-from typing import Any, Dict, Optional, Iterable
+from typing import Iterable
 from typing_extensions import Protocol
 
+
 class Validator(Protocol):
+    """
+    This class is only used for TypeChecking (for IDEs, mypy, pylint, etc)
+    due to the way ``Draft7Validator`` is created. They are created or inherit
+    from proper classes. Hence you can not have ``type: Draft7Validator``.
+    """
     def is_valid(self, instance) -> bool:
         """Check if the instance is valid under the current schema"""
         ...
