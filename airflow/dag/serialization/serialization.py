@@ -22,7 +22,7 @@
 import datetime
 import json
 import logging
-from typing import List, Optional, TYPE_CHECKING, Union
+from typing import Iterable, Optional, TYPE_CHECKING, Union
 
 import dateutil.parser
 import pendulum
@@ -57,7 +57,7 @@ class Serialization:
     _datetime_types = (datetime.datetime, datetime.date, datetime.time)
 
     # Exactly these fields will be contained in the serialized Json
-    _included_fields = []   # type: List[str]
+    _included_fields = []   # type: Iterable[str]
 
     # Object types that are always excluded in serialization.
     # FIXME: not needed if _included_fields of DAG and operator are customized.

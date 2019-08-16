@@ -40,9 +40,9 @@ class SerializedDAG(DAG, Serialization):
     """
     # Stringified DAGs and operators contain exactly these fields.
     # FIXME: to customize included fields and keep only necessary fields.
-    _included_fields = list(set(vars(DAG(dag_id='test')).keys()) - {
+    _included_fields = set(vars(DAG(dag_id='test')).keys()) - {
         'parent_dag',
-    })
+    }
 
     _json_schema = load_dag_schema()
 
