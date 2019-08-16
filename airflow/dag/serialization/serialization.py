@@ -164,7 +164,6 @@ class Serialization:
                 LOG.debug('Cast type %s to str in serialization.', type(var))
                 return str(var)
         except Exception:  # pylint: disable=broad-except
-            raise
             LOG.warning('Failed to stringify.', exc_info=True)
             return FAILED
 
