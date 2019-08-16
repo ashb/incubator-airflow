@@ -23,6 +23,8 @@ import json
 import jsonschema
 import pkgutil
 from typing import Iterable
+
+from airflow.exceptions import AirflowException
 from typing_extensions import Protocol
 
 
@@ -46,6 +48,13 @@ class Validator(Protocol):
 
 
 def load_dag_schema() -> Validator:
-    schema = json.loads(pkgutil.get_data(__name__, 'schema.json'))
+
+    schema_file_name = 'schema.json'
+    schema_file = pkgutil.get_data(__name__, schema_file_name)
+
+    if schema_file is None:
+        raise AirflowException("Schema file (%s) does not exists", schema_file_name)
+
+    schema = json.loads(schema_file)
     jsonschema.Draft7Validator.check_schema(schema)
     return jsonschema.Draft7Validator(schema)
