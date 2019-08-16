@@ -22,24 +22,13 @@
 import json
 import jsonschema
 import pkgutil
-from typing import Any, Dict, Optional, Collection
-from typing_extensions import Protocol
-
-class Validator(Protocol):
-    def is_valid(self, instance) -> bool:
-        """Check if the instance is valid under the current schema"""
-        ...
-
-    def validate(self, instance) -> None:
-        """Check if the instance is valid under the current schema, raising validation error if not"""
-        ...
-
-    def iter_errors(self, instance) -> Collection[jsonschema.exceptions.ValidationError]:
-        """Lazily yield each of the validation errors in the given instance"""
-        ...
 
 
-def load_dag_schema() -> Validator:
+def load_dag_schema() -> jsonschema.Draft7Validator:
+    """
+    Load Json Schema for DAG
+    """
+
     schema = json.loads(pkgutil.get_data(__name__, 'schema.json'))
     jsonschema.Draft7Validator.check_schema(schema)
     return jsonschema.Draft7Validator(schema)

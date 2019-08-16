@@ -22,10 +22,9 @@
 import datetime
 import json
 import logging
-from typing import Dict, Optional, TYPE_CHECKING, Union
+from typing import Optional, TYPE_CHECKING, Union
 
 import dateutil.parser
-import jsonschema
 import pendulum
 
 import airflow
@@ -56,11 +55,13 @@ class Serialization:
     # Time types.
     _datetime_types = (datetime.datetime, datetime.date, datetime.time)
 
+    _included_fields = []
+
     # Object types that are always excluded in serialization.
     # FIXME: not needed if _included_fields of DAG and operator are customized.
     _excluded_types = (logging.Logger, Connection, type)
 
-    _json_schema = None     # type: Optional[Dict]
+    _json_schema = None
 
     @classmethod
     def to_json(cls, var: Union[DAG, BaseOperator, dict, list, set, tuple]) -> str:
