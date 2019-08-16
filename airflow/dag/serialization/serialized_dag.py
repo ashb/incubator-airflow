@@ -50,8 +50,7 @@ class SerializedDAG(DAG, Serialization):
     def serialize_dag(cls, dag: DAG) -> dict:
         """Serializes a DAG into a JSON object.
         """
-        new_dag = {Encoding.TYPE: DAT.DAG}
-        new_dag[Encoding.VAR] = cls._serialize_object(dag)
+        new_dag = {Encoding.TYPE: DAT.DAG, Encoding.VAR: cls._serialize_object(dag)}
         return new_dag
 
     @classmethod
