@@ -22,7 +22,7 @@
 import json
 import jsonschema
 import pkgutil
-from typing import Any, Dict, Optional, Collection
+from typing import Any, Dict, Optional, Iterable
 from typing_extensions import Protocol
 
 class Validator(Protocol):
@@ -34,7 +34,7 @@ class Validator(Protocol):
         """Check if the instance is valid under the current schema, raising validation error if not"""
         ...
 
-    def iter_errors(self, instance) -> Collection[jsonschema.exceptions.ValidationError]:
+    def iter_errors(self, instance) -> Iterable[jsonschema.exceptions.ValidationError]:
         """Lazily yield each of the validation errors in the given instance"""
         ...
 
