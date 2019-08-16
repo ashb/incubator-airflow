@@ -60,6 +60,6 @@ def load_dag_schema() -> Validator:
     if schema_file is None:
         raise AirflowException("Schema file {} does not exists".format(schema_file_name))
 
-    schema = json.loads(schema_file)
+    schema = json.loads(schema_file.decode())
     jsonschema.Draft7Validator.check_schema(schema)
     return jsonschema.Draft7Validator(schema)
