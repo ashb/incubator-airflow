@@ -27,11 +27,22 @@ import random
 from dateutil import relativedelta
 from sqlalchemy import event, exc, select
 from sqlalchemy.types import Text, DateTime, TypeDecorator
+from sqlalchemy.ext import baked
 
 from airflow.utils.log.logging_mixin import LoggingMixin
 
 log = LoggingMixin().log
 utc = pendulum.timezone('UTC')
+
+BAKED_QUERIES = baked.bakery()
+"""
+The in-process builder for "pre-baked" queries.
+
+This lets us cache the building of SQL strings (not the query results, but the
+SQL to execute) on a per process details.  See :module:`sqlalchemy.ext.baked`
+and `Baked Queries
+<https://docs.sqlalchemy.org/en/13/orm/extensions/baked.html>`_ for more details
+"""
 
 
 def setup_event_handlers(engine,

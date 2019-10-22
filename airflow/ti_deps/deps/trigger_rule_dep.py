@@ -17,11 +17,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from sqlalchemy import case, func
+from sqlalchemy import bindparam, case, func
 
 import airflow
 from airflow.ti_deps.deps.base_ti_dep import BaseTIDep
 from airflow.utils.db import provide_session
+from airflow.utils.sqlalchemy import BAKED_QUERIES
 from airflow.utils.state import State
 
 
@@ -34,9 +35,38 @@ class TriggerRuleDep(BaseTIDep):
     IGNOREABLE = True
     IS_TASK_DEP = True
 
+    @staticmethod
+    def bake_dep_status_query():
+        TI = airflow.models.TaskInstance
+        # TODO(unknown): this query becomes quite expensive with dags that have many
+        # tasks. It should be refactored to let the task report to the dag run and get the
+        # aggregates from there.
+        q = BAKED_QUERIES(lambda session: session.query(
+            func.coalesce(func.sum(case([(TI.state == State.SUCCESS, 1)], else_=0)), 0),
+            func.coalesce(func.sum(case([(TI.state == State.SKIPPED, 1)], else_=0)), 0),
+            func.coalesce(func.sum(case([(TI.state == State.FAILED, 1)], else_=0)), 0),
+            func.coalesce(func.sum(case([(TI.state == State.UPSTREAM_FAILED, 1)], else_=0)), 0),
+            func.count(TI.task_id),
+        ))
+        q += lambda q: q.filter(TI.dag_id == bindparam('dag_id'))
+        q += lambda q: q.filter(TI.execution_date == bindparam('execution_date'))
+        q += lambda q: q.filter(TI.task_id.in_(bindparam('task_ids', expanding=True)))
+        q += lambda q: q.filter(TI.state.in_([
+            State.SUCCESS, State.FAILED,
+            State.UPSTREAM_FAILED, State.SKIPPED]))
+        return q
+
+    @classmethod
+    def _dep_status_query(cls, session, dag_id, execution_date, upstream_task_ids):
+        q = cls.bake_dep_status_query()
+        return q(session).params(
+            dag_id=dag_id,
+            execution_date=execution_date,
+            task_ids=list(upstream_task_ids),
+        )
+
     @provide_session
     def _get_dep_statuses(self, ti, session, dep_context):
-        TI = airflow.models.TaskInstance
         TR = airflow.utils.trigger_rule.TriggerRule
 
         # Checking that all upstream dependencies have succeeded
@@ -49,31 +79,7 @@ class TriggerRuleDep(BaseTIDep):
             yield self._passing_status(reason="The task had a dummy trigger rule set.")
             return
 
-        # TODO(unknown): this query becomes quite expensive with dags that have many
-        # tasks. It should be refactored to let the task report to the dag run and get the
-        # aggregates from there.
-        qry = (
-            session
-            .query(
-                func.coalesce(func.sum(
-                    case([(TI.state == State.SUCCESS, 1)], else_=0)), 0),
-                func.coalesce(func.sum(
-                    case([(TI.state == State.SKIPPED, 1)], else_=0)), 0),
-                func.coalesce(func.sum(
-                    case([(TI.state == State.FAILED, 1)], else_=0)), 0),
-                func.coalesce(func.sum(
-                    case([(TI.state == State.UPSTREAM_FAILED, 1)], else_=0)), 0),
-                func.count(TI.task_id),
-            )
-            .filter(
-                TI.dag_id == ti.dag_id,
-                TI.task_id.in_(ti.task.upstream_task_ids),
-                TI.execution_date == ti.execution_date,
-                TI.state.in_([
-                    State.SUCCESS, State.FAILED,
-                    State.UPSTREAM_FAILED, State.SKIPPED]),
-            )
-        )
+        qry = self._dep_status_query(session, ti.dag_id, ti.execution_date, ti.task.upstream_task_ids)
 
         successes, skipped, failed, upstream_failed, done = qry.first()
         yield from self._evaluate_trigger_rule(
@@ -221,3 +227,6 @@ class TriggerRuleDep(BaseTIDep):
         else:
             yield self._failing_status(
                 reason="No strategy to evaluate trigger rule '{0}'.".format(tr))
+
+
+# Ensure that this query is build in the master process, before we fork of a sub-process to parse the DAGs

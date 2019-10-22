@@ -58,3 +58,7 @@ sensors._integrate_plugins()  # noqa: E402
 hooks._integrate_plugins()
 executors._integrate_plugins()
 macros._integrate_plugins()
+
+
+from . import ti_deps
+ti_deps.deps.trigger_rule_dep.TriggerRuleDep.bake_dep_status_query()
