@@ -20,7 +20,7 @@ from typing import Optional, cast
 
 from sqlalchemy import (
     Column, Integer, String, Boolean, PickleType, Index, UniqueConstraint, func, DateTime, or_,
-    and_
+    and_, bindparam,
 )
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import synonym
@@ -28,11 +28,11 @@ from sqlalchemy.orm.session import Session
 from airflow.exceptions import AirflowException
 from airflow.models.base import Base, ID_LEN
 from airflow.stats import Stats
-from airflow.ti_deps.dep_context import DepContext
+from airflow.ti_deps.dep_context import SCHEDULEABLE_STATES, DepContext
 from airflow.utils import timezone
 from airflow.utils.db import provide_session
 from airflow.utils.log.logging_mixin import LoggingMixin
-from airflow.utils.sqlalchemy import UtcDateTime
+from airflow.utils.sqlalchemy import BAKED_QUERIES, UtcDateTime
 from airflow.utils.state import State
 
 
@@ -125,7 +125,7 @@ class DagRun(Base, LoggingMixin):
     @provide_session
     def find(dag_id=None, run_id=None, execution_date=None,
              state=None, external_trigger=None, no_backfills=False,
-             session=None):
+             exclude_future=False, limit=None, session=None):
         """
         Returns a set of dag runs for the given search criteria.
 
@@ -142,33 +142,48 @@ class DagRun(Base, LoggingMixin):
         :param no_backfills: return no backfills (True), return all (False).
             Defaults to False
         :type no_backfills: bool
+        :param exclude_future: wether to exclude DagRuns with an execution_date
+            in the future
+        :type exclude_future: bool
+        :param limit:
+        :type limit: int or None
         :param session: database session
         :type session: sqlalchemy.orm.session.Session
         """
         DR = DagRun
 
-        qry = session.query(DR)
+        qry = BAKED_QUERIES(lambda session: session.query(DR).order_by(DR.execution_date))
         if dag_id:
-            qry = qry.filter(DR.dag_id == dag_id)
+            qry += lambda q: q.filter(DR.dag_id == bindparam('dag_id'))
         if run_id:
-            qry = qry.filter(DR.run_id == run_id)
+            qry += lambda q: q.filter(DR.run_id == bindparam('run_id'))
         if execution_date:
             if isinstance(execution_date, list):
-                qry = qry.filter(DR.execution_date.in_(execution_date))
+                qry += lambda q: q.filter(DR.execution_date.in_(bindparam('execution_date', expanding=True)))
             else:
-                qry = qry.filter(DR.execution_date == execution_date)
+                qry += lambda q: q.filter(DR.execution_date == bindparam('execution_date'))
         if state:
-            qry = qry.filter(DR.state == state)
+            qry += lambda q: q.filter(DR.state == bindparam('state'))
         if external_trigger is not None:
-            qry = qry.filter(DR.external_trigger == external_trigger)
+            qry += lambda q: q.filter(DR.external_trigger == bindparam('external_trigger'))
         if no_backfills:
             # in order to prevent a circular dependency
             from airflow.jobs import BackfillJob
-            qry = qry.filter(DR.run_id.notlike(BackfillJob.ID_PREFIX + '%'))
+            qry += lambda q: q.filter(DR.run_id.notlike(BackfillJob.ID_PREFIX + '%'))
+        if exclude_future:
+            qry += lambda q: q.filter(DR.execution_date <= func.now())
+        if limit is not None:
+            qry += lambda q: q.limit(bindparam('limit'))
 
-        dr = qry.order_by(DR.execution_date).all()
-
-        return dr
+        return qry(session).params(
+            dag_id=dag_id,
+            run_id=run_id,
+            execution_date=execution_date,
+            state=state,
+            external_trigger=external_trigger,
+            no_backfills=no_backfills,
+            limit=limit,
+        )
 
     @provide_session
     def get_task_instances(self, state=None, session=None):
@@ -176,27 +191,35 @@ class DagRun(Base, LoggingMixin):
         Returns the task instances for this dag run
         """
         from airflow.models.taskinstance import TaskInstance  # Avoid circular import
-        tis = session.query(TaskInstance).filter(
-            TaskInstance.dag_id == self.dag_id,
-            TaskInstance.execution_date == self.execution_date,
-        )
+        q = BAKED_QUERIES(lambda session: session.query(TaskInstance).filter(
+            TaskInstance.dag_id == bindparam('dag_id'),
+            TaskInstance.execution_date == bindparam('execution_date'),
+        ))
+
         if state:
             if isinstance(state, str):
-                tis = tis.filter(TaskInstance.state == state)
-            else:
+                q += lambda q: q.filter(TaskInstance.state == bindparam('state'))
+            elif None in state:
                 # this is required to deal with NULL values
-                if None in state:
-                    tis = tis.filter(
-                        or_(TaskInstance.state.in_(state),
-                            TaskInstance.state.is_(None))
-                    )
-                else:
-                    tis = tis.filter(TaskInstance.state.in_(state))
+                q += lambda q: q.filter(
+                    or_(TaskInstance.state.in_(bindparam('state', expanding=True)),
+                        TaskInstance.state.is_(None))
+                )
+            else:
+                q += lambda q: q.filter(TaskInstance.state.in_(bindparam('state', expanding=True)))
 
         if self.dag and self.dag.partial:
-            tis = tis.filter(TaskInstance.task_id.in_(self.dag.task_ids))
+            q += lambda q: q.filter(TaskInstance.task_id.in_(bindparam('task_ids', expanding=True)))
 
-        return tis.all()
+        if isinstance(state, set):
+            state = list(state)
+
+        return q(session).params(
+            dag_id=self.dag_id,
+            execution_date=self.execution_date,
+            state=state,
+            task_ids=self.dag.task_ids,
+        ).all()
 
     @provide_session
     def get_task_instance(self, task_id, session=None):
@@ -262,10 +285,14 @@ class DagRun(Base, LoggingMixin):
         Determines the overall state of the DagRun based on the state
         of its TaskInstances.
 
-        :return: State
+        :return: state, schedulable_task_instances
+        :rtype: (State, list[TaskInstance])
         """
+        from airflow.ti_deps.deps.ready_to_reschedule import ReadyToRescheduleDep
+        from airflow.ti_deps.deps.not_in_retry_period_dep import NotInRetryPeriodDep
 
         dag = self.get_dag()
+        tis_to_schedule = []
 
         tis = self.get_task_instances(session=session)
         self.log.debug("Updating state for %s considering %s task(s)", self, len(tis))
@@ -285,25 +312,27 @@ class DagRun(Base, LoggingMixin):
             session=session
         )
         none_depends_on_past = all(not t.task.depends_on_past for t in unfinished_tasks)
-        none_task_concurrency = all(t.task.task_concurrency is None
-                                    for t in unfinished_tasks)
-        # small speed up
-        if unfinished_tasks and none_depends_on_past and none_task_concurrency:
-            # todo: this can actually get pretty slow: one task costs between 0.01-015s
-            no_dependencies_met = True
-            for ut in unfinished_tasks:
-                # We need to flag upstream and check for changes because upstream
-                # failures/re-schedules can result in deadlock false positives
-                old_state = ut.state
-                deps_met = ut.are_dependencies_met(
-                    dep_context=DepContext(
-                        flag_upstream_failed=True,
-                        ignore_in_retry_period=True,
-                        ignore_in_reschedule_period=True),
-                    session=session)
-                if deps_met or old_state != ut.current_state(session=session):
-                    no_dependencies_met = False
-                    break
+        none_task_concurrency = all(t.task.task_concurrency is None for t in unfinished_tasks)
+
+        no_dependencies_met = True
+
+        dep_context = DepContext(flag_upstream_failed=True)
+
+        for ut in unfinished_tasks:
+            # We need to flag upstream and check for changes because upstream
+            # failures/re-schedules can result in deadlock false positives
+            old_state = ut.state
+            unmet_deps = list(ut.get_failed_dep_statuses(dep_context=dep_context, session=session))
+            unmet_non_delay_dep = any(
+                unmet_dep for unmet_dep in unmet_deps
+                if unmet_dep.dep_name not in {NotInRetryPeriodDep.NAME, ReadyToRescheduleDep.NAME}
+            )
+
+            state = ut.current_state(session=session)
+            if not(unmet_non_delay_dep) or old_state != state:
+                no_dependencies_met = False
+            if not unmet_deps and state in SCHEDULEABLE_STATES:
+                tis_to_schedule.append(ut)
 
         duration = (timezone.utcnow() - start_dttm).total_seconds() * 1000
         Stats.timing("dagrun.dependency-check.{}".format(self.dag_id), duration)
@@ -344,7 +373,7 @@ class DagRun(Base, LoggingMixin):
         session.merge(self)
         session.commit()
 
-        return self.state
+        return self.state, tis_to_schedule
 
     def _emit_duration_stats_for_finished_state(self):
         if self.state == State.RUNNING:

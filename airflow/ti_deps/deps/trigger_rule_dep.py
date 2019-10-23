@@ -227,6 +227,3 @@ class TriggerRuleDep(BaseTIDep):
         else:
             yield self._failing_status(
                 reason="No strategy to evaluate trigger rule '{0}'.".format(tr))
-
-
-# Ensure that this query is build in the master process, before we fork of a sub-process to parse the DAGs

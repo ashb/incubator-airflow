@@ -33,7 +33,7 @@ import lazy_object_proxy
 import pendulum
 
 import dill
-from sqlalchemy import Column, String, Float, Integer, PickleType, Index, func
+from sqlalchemy import Column, String, Float, Integer, PickleType, Index, func, bindparam
 from sqlalchemy.orm import reconstructor
 from sqlalchemy.orm.session import Session
 
@@ -56,7 +56,7 @@ from airflow.utils.email import send_email
 from airflow.utils.helpers import is_container
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.utils.net import get_hostname
-from airflow.utils.sqlalchemy import UtcDateTime
+from airflow.utils.sqlalchemy import BAKED_QUERIES, UtcDateTime
 from airflow.utils.state import State
 from airflow.utils.timeout import timeout
 
@@ -404,16 +404,16 @@ class TaskInstance(Base, LoggingMixin):
         a new session is used.
         """
         TI = TaskInstance
-        ti = session.query(TI).filter(
-            TI.dag_id == self.dag_id,
-            TI.task_id == self.task_id,
-            TI.execution_date == self.execution_date,
-        ).all()
-        if ti:
-            state = ti[0].state
-        else:
-            state = None
-        return state
+        q = BAKED_QUERIES(lambda session: session.query(TI.state).filter(
+            TI.dag_id == bindparam('dag_id'),
+            TI.task_id == bindparam('task_id'),
+            TI.execution_date == bindparam('execution_date'),
+        ))
+        return q(session).params(
+            dag_id=self.dag_id,
+            task_id=self.task_id,
+            execution_date=self.execution_date,
+        ).scalar()
 
     @provide_session
     def error(self, session=None):
@@ -435,29 +435,36 @@ class TaskInstance(Base, LoggingMixin):
             session is committed.
         """
         TI = TaskInstance
-
-        qry = session.query(TI).filter(
-            TI.dag_id == self.dag_id,
-            TI.task_id == self.task_id,
-            TI.execution_date == self.execution_date)
+        q = BAKED_QUERIES(lambda session: session.query(
+            TI.state,
+            TI.start_date,
+            TI.end_date,
+            TI._try_number,
+            TI.max_tries,
+            TI.hostname,
+            TI.pid
+        ).filter(
+            TI.dag_id == bindparam('dag_id'),
+            TI.task_id == bindparam('task_id'),
+            TI.execution_date == bindparam('execution_date'),
+        ))
 
         if lock_for_update:
-            ti = qry.with_for_update().first()
-        else:
-            ti = qry.first()
-        if ti:
-            self.state = ti.state
-            self.start_date = ti.start_date
-            self.end_date = ti.end_date
-            # Get the raw value of try_number column, don't read through the
-            # accessor here otherwise it will be incremeneted by one already.
-            self.try_number = ti._try_number
-            self.max_tries = ti.max_tries
-            self.hostname = ti.hostname
-            self.pid = ti.pid
-            self.executor_config = ti.executor_config
-        else:
-            self.state = None
+            q += lambda q: q.with_for_update()
+
+        vals = iter(q(session).params(
+            dag_id=self.dag_id,
+            task_id=self.task_id,
+            execution_date=self.execution_date,
+        ).one())
+
+        self.state = next(vals)
+        self.start_date = next(vals)
+        self.end_date = next(vals)
+        self._try_number = next(vals)
+        self.max_tries = next(vals)
+        self.hostname = next(vals)
+        self.pid = next(vals)
 
     @provide_session
     def clear_xcom_data(self, session=None):

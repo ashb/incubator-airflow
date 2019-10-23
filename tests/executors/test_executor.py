@@ -20,6 +20,7 @@
 from collections import defaultdict
 
 from airflow.executors.base_executor import BaseExecutor
+from airflow.models import TaskInstance
 from airflow.utils.state import State
 from airflow.utils.db import create_session
 
@@ -61,7 +62,10 @@ class TestExecutor(BaseExecutor):
             for (key, (_, _, _, simple_ti)) in sorted_queue:
                 self.queued_tasks.pop(key)
                 state = self.mock_task_results[key]
-                ti = simple_ti.construct_task_instance(session=session, lock_for_update=True)
+                if isinstance(simple_ti, TaskInstance):
+                    ti = simple_ti
+                else:
+                    ti = simple_ti.construct_task_instance(session=session, lock_for_update=True)
                 ti.set_state(state, session=session)
                 self.change_state(key, state)
 

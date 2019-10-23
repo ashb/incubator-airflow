@@ -31,7 +31,7 @@ from time import sleep
 from typing import List, Set
 
 from setproctitle import setproctitle
-from sqlalchemy import and_, func, not_, or_
+from sqlalchemy import and_, bindparam, func, not_, or_
 from sqlalchemy.orm.session import make_transient
 
 from airflow import configuration as conf
@@ -50,6 +50,7 @@ from airflow.utils.dag_processing import (AbstractDagFileProcessor,
 from airflow.utils.db import provide_session
 from airflow.utils.email import get_email_address_list, send_email
 from airflow.utils.log.logging_mixin import LoggingMixin, StreamLogWriter, set_context
+from airflow.utils.sqlalchemy import BAKED_QUERIES
 from airflow.jobs.base_job import BaseJob
 from airflow.utils.state import State
 
@@ -675,7 +676,7 @@ class SchedulerJob(BaseJob):
                 return next_run
 
     @provide_session
-    def _process_task_instances(self, dag, task_instances_list, session=None):
+    def _process_task_instances(self, dag, session=None):
         """
         This method schedules the tasks for a single DAG by looking at the
         active DAG runs and adding task instances that should run to the
@@ -683,56 +684,32 @@ class SchedulerJob(BaseJob):
         """
 
         # update the state of the previously active dag runs
-        dag_runs = DagRun.find(dag_id=dag.dag_id, state=State.RUNNING, session=session)
-        active_dag_runs = []
-        for run in dag_runs:
-            self.log.info("Examining DAG run %s", run)
-            # don't consider runs that are executed in the future
-            if run.execution_date > timezone.utcnow():
-                self.log.error(
-                    "Execution date is in future: %s",
-                    run.execution_date
-                )
-                continue
+        dag_runs = DagRun.find(
+            dag_id=dag.dag_id,
+            state=State.RUNNING,
+            no_backfills=True,
+            exclude_future=True,
+            session=session,
+            limit=dag.max_active_runs + 1,
+        )
 
-            if len(active_dag_runs) >= dag.max_active_runs:
+        tis = []
+
+        # Slice on the `dag_runs` object does an SQL LIMIT. We ask for one more than we want so we can tell if
+        # we are over the max_active_runs and log accordingly.
+        for i, run in enumerate(dag_runs):
+            if i >= dag.max_active_runs:
                 self.log.info("Number of active dag runs reached max_active_run.")
                 break
 
-            # skip backfill dagruns for now as long as they are not really scheduled
-            if run.is_backfill:
-                continue
-
-            # todo: run.dag is transient but needs to be set
             run.dag = dag
             # todo: preferably the integrity check happens at dag collection time
             run.verify_integrity(session=session)
-            run.update_state(session=session)
+            state, schedulable_tis = run.update_state(session=session)
             if run.state == State.RUNNING:
                 make_transient(run)
-                active_dag_runs.append(run)
-
-        for run in active_dag_runs:
-            self.log.debug("Examining active DAG run: %s", run)
-            # this needs a fresh session sometimes tis get detached
-            tis = run.get_task_instances(state=(State.NONE,
-                                                State.UP_FOR_RETRY,
-                                                State.UP_FOR_RESCHEDULE))
-
-            # this loop is quite slow as it uses are_dependencies_met for
-            # every task (in ti.is_runnable). This is also called in
-            # update_state above which has already checked these tasks
-            for ti in tis:
-                task = dag.get_task(ti.task_id)
-
-                # fixme: ti.task is transient but needs to be set
-                ti.task = task
-
-                if ti.are_dependencies_met(
-                        dep_context=DepContext(flag_upstream_failed=True),
-                        session=session):
-                    self.log.debug('Queuing task: %s', ti)
-                    task_instances_list.append(ti.key)
+                tis.extend(schedulable_tis)
+        return tis
 
     @provide_session
     def _change_state_for_tis_without_dagrun(self,
@@ -805,15 +782,17 @@ class SchedulerJob(BaseJob):
 
         """
         TI = models.TaskInstance
-        ti_concurrency_query = (
-            session
-            .query(TI.task_id, TI.dag_id, func.count('*'))
-            .filter(TI.state.in_(states))
+
+        ti_concurrency_query = BAKED_QUERIES(
+            lambda session: session.query(TI.task_id, TI.dag_id, func.count('*')).filter(
+                TI.state.in_(bindparam('states', expanding=True))
+            )
             .group_by(TI.task_id, TI.dag_id)
-        ).all()
+            .group_by(TI.task_id, TI.dag_id)
+        )
         dag_map = defaultdict(int)
         task_map = defaultdict(int)
-        for result in ti_concurrency_query:
+        for result in ti_concurrency_query(session).params(states=states).all():
             task_id, dag_id, count = result
             dag_map[dag_id] += count
             task_map[(dag_id, task_id)] = count
@@ -843,30 +822,34 @@ class SchedulerJob(BaseJob):
         TI = models.TaskInstance
         DR = models.DagRun
         DM = models.DagModel
-        ti_query = (
-            session
-            .query(TI)
-            .filter(TI.dag_id.in_(simple_dag_bag.dag_ids))
+        q = BAKED_QUERIES(
+            lambda session: session.query(TI).filter(
+                TI.dag_id.in_(bindparam('dag_ids', expanding=True))
+            )
             .outerjoin(
                 DR,
                 and_(DR.dag_id == TI.dag_id, DR.execution_date == TI.execution_date)
             )
-            .filter(or_(DR.run_id == None,  # noqa: E711 pylint: disable=singleton-comparison
-                    not_(DR.run_id.like(BackfillJob.ID_PREFIX + '%'))))
+            .filter(or_(DR.run_id.is_(None),
+                        not_(DR.run_id.like(BackfillJob.ID_PREFIX + '%'))))
             .outerjoin(DM, DM.dag_id == TI.dag_id)
-            .filter(or_(DM.dag_id == None,  # noqa: E711 pylint: disable=singleton-comparison
-                    not_(DM.is_paused)))
+            .filter(or_(DM.dag_id.is_(None), not_(DM.is_paused)))
         )
 
         # Additional filters on task instance state
         if None in states:
-            ti_query = ti_query.filter(
-                or_(TI.state == None, TI.state.in_(states))  # noqa: E711 pylint: disable=singleton-comparison
+            q += lambda q: q.filter(
+                or_(TI.state.is_(None), TI.state.in_(bindparam('states', expanding=True)))
             )
         else:
-            ti_query = ti_query.filter(TI.state.in_(states))
+            q += lambda q: q.filter(
+                TI.state.in_(bindparam('states', expanding=True))
+            )
 
-        task_instances_to_examine = ti_query.all()
+        task_instances_to_examine = q(session).params(
+            dag_ids=list(simple_dag_bag.dag_ids),
+            states=states,
+        ).all()
 
         if len(task_instances_to_examine) == 0:
             self.log.debug("No tasks to consider for execution.")
@@ -992,9 +975,7 @@ class SchedulerJob(BaseJob):
             ti.task_id = copy_task_id
         return executable_tis
 
-    @provide_session
-    def _change_state_for_executable_task_instances(self, task_instances,
-                                                    acceptable_states, session=None):
+    def _change_state_for_executable_task_instances(self, task_instances, acceptable_states, session):
         """
         Changes the state of task instances in the list with one of the given states
         to QUEUED atomically, and returns the TIs changed in SimpleTaskInstance format.
@@ -1045,18 +1026,13 @@ class SchedulerJob(BaseJob):
                                          else task_instance.queued_dttm)
             session.merge(task_instance)
 
-        # Generate a list of SimpleTaskInstance for the use of queuing
-        # them in the executor.
-        simple_task_instances = [SimpleTaskInstance(ti) for ti in
-                                 tis_to_set_to_queued]
-
         task_instance_str = "\n\t".join(
             [repr(x) for x in tis_to_set_to_queued])
 
         session.commit()
         self.log.info("Setting the following %s tasks to queued state:\n\t%s",
                       len(tis_to_set_to_queued), task_instance_str)
-        return simple_task_instances
+        return tis_to_set_to_queued
 
     def _enqueue_task_instances_with_queued_state(self, simple_dag_bag,
                                                   simple_task_instances):
@@ -1071,7 +1047,7 @@ class SchedulerJob(BaseJob):
         """
         TI = models.TaskInstance
         # actually enqueue them
-        for simple_task_instance in simple_task_instances:
+        for i, simple_task_instance in enumerate(simple_task_instances):
             simple_dag = simple_dag_bag.get_dag(simple_task_instance.dag_id)
             command = TI.generate_command(
                 simple_task_instance.dag_id,
@@ -1099,6 +1075,7 @@ class SchedulerJob(BaseJob):
                 command,
                 priority=priority,
                 queue=queue)
+        return i + 1
 
     @provide_session
     def _execute_task_instances(self,
@@ -1129,11 +1106,11 @@ class SchedulerJob(BaseJob):
                 self._change_state_for_executable_task_instances(items,
                                                                  states,
                                                                  session=session)
-            self._enqueue_task_instances_with_queued_state(
+            num = self._enqueue_task_instances_with_queued_state(
                 simple_dag_bag,
                 simple_tis_with_state_changed)
             session.commit()
-            return result + len(simple_tis_with_state_changed)
+            return result + num
 
         return helpers.reduce_in_chunks(query, executable_tis, 0, self.max_tis_per_query)
 
@@ -1177,7 +1154,7 @@ class SchedulerJob(BaseJob):
             session.commit()
             self.log.info("Set the following tasks to scheduled state:\n\t%s", task_instance_str)
 
-    def _process_dags(self, dagbag, dags, tis_out):
+    def _process_dags(self, dagbag, dags, session):
         """
         Iterates over the dags and processes them. Processing includes:
 
@@ -1189,10 +1166,10 @@ class SchedulerJob(BaseJob):
         :type dagbag: airflow.models.DagBag
         :param dags: the DAGs from the DagBag to process
         :type dags: airflow.models.DAG
-        :param tis_out: A list to add generated TaskInstance objects
-        :type tis_out: list[TaskInstance]
-        :rtype: None
+        :return: A list to add generated TaskInstance objects
+        :rtype: list[TaskInstance]
         """
+        tis = []
         for dag in dags:
             dag = dagbag.get_dag(dag.dag_id)
             if not dag:
@@ -1208,7 +1185,7 @@ class SchedulerJob(BaseJob):
             # Only creates DagRun for DAGs that are not subdag since
             # DagRun of subdags are created when SubDagOperator executes.
             if not dag.is_subdag:
-                dag_run = self.create_dag_run(dag)
+                dag_run = self.create_dag_run(dag, session=session)
                 if dag_run:
                     expected_start_date = dag.following_schedule(dag_run.execution_date)
                     if expected_start_date:
@@ -1217,8 +1194,9 @@ class SchedulerJob(BaseJob):
                             'dagrun.schedule_delay.{dag_id}'.format(dag_id=dag.dag_id),
                             schedule_delay)
                 self.log.info("Created %s", dag_run)
-            self._process_task_instances(dag, tis_out)
-            self.manage_slas(dag)
+            tis.extend(self._process_task_instances(dag, session=session))
+            self.manage_slas(dag, session=session)
+        return tis
 
     @provide_session
     def _process_executor_events(self, simple_dag_bag, session=None):
@@ -1237,10 +1215,16 @@ class SchedulerJob(BaseJob):
                 dag_id, task_id, execution_date, state, try_number
             )
             if state == State.FAILED or state == State.SUCCESS:
-                qry = session.query(TI).filter(TI.dag_id == dag_id,
-                                               TI.task_id == task_id,
-                                               TI.execution_date == execution_date)
-                ti = qry.first()
+                qry = BAKED_QUERIES(lambda session: session.query(TI).filter(
+                    TI.dag_id == bindparam('dag_id'),
+                    TI.task_id == bindparam('task_id'),
+                    TI.execution_date == bindparam('execution_date')))
+                ti = qry(session).params(
+                    dag_id=dag_id,
+                    task_id=task_id,
+                    execution_date=execution_date
+                ).one_or_none()
+
                 if not ti:
                     self.log.warning("TaskInstance %s went missing from the database", ti)
                     continue
@@ -1522,17 +1506,7 @@ class SchedulerJob(BaseJob):
 
         dags = self._find_dags_to_process(dagbag.dags.values(), paused_dag_ids)
 
-        # Not using multiprocessing.Queue() since it's no longer a separate
-        # process and due to some unusual behavior. (empty() incorrectly
-        # returns true as described in https://bugs.python.org/issue23582 )
-        ti_keys_to_schedule = []
-
-        self._process_dags(dagbag, dags, ti_keys_to_schedule)
-
-        for ti_key in ti_keys_to_schedule:
-            dag = dagbag.dags[ti_key[0]]
-            task = dag.get_task(ti_key[1])
-            ti = models.TaskInstance(task, ti_key[2])
+        for ti in self._process_dags(dagbag, dags, session=session):
 
             ti.refresh_from_db(session=session, lock_for_update=True)
             # We can defer checking the task dependency checks to the worker themselves
