@@ -28,12 +28,19 @@ from sqlalchemy.orm.session import Session
 from airflow.exceptions import AirflowException
 from airflow.models.base import Base, ID_LEN
 from airflow.stats import Stats
-from airflow.ti_deps.dep_context import SCHEDULEABLE_STATES, DepContext
+from airflow.ti_deps.dep_context import DepContext
 from airflow.utils import timezone
 from airflow.utils.db import provide_session
 from airflow.utils.log.logging_mixin import LoggingMixin
 from airflow.utils.sqlalchemy import BAKED_QUERIES, UtcDateTime
 from airflow.utils.state import State
+
+
+SCHEDULEABLE_STATES = {
+    State.NONE,
+    State.UP_FOR_RETRY,
+    State.UP_FOR_RESCHEDULE,
+}
 
 
 class DagRun(Base, LoggingMixin):
