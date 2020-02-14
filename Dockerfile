@@ -297,13 +297,14 @@ COPY setup.py ${AIRFLOW_SOURCES}/setup.py
 COPY setup.cfg ${AIRFLOW_SOURCES}/setup.cfg
 
 COPY airflow/version.py ${AIRFLOW_SOURCES}/airflow/version.py
-COPY airflow/__init__.py ${AIRFLOW_SOURCES}/airflow/__init__.py
-COPY airflow/bin/airflow ${AIRFLOW_SOURCES}/airflow/bin/airflow
 
 # The goal of this line is to install the dependencies from the most current setup.py from sources
 # This will be usually incremental small set of packages in CI optimized build, so it will be very fast
 # In non-CI optimized build this will install all dependencies before installing sources.
-RUN pip install -e ".[${AIRFLOW_EXTRAS}]"
+RUN mkdir -p airflow/bin/ \
+    && touch airflow/bin/airflow \
+    && pip install -e ".[${AIRFLOW_EXTRAS}]" \
+    && rm airflow/bin/airflow
 
 # Copy all www files here so that we can run yarn building for production
 COPY airflow/www/ ${AIRFLOW_SOURCES}/airflow/www/

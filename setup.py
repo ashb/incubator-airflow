@@ -17,35 +17,48 @@
 # under the License.
 """Setup.py for the Airflow project."""
 
-import io
 import logging
 import os
+import re
 import subprocess
 import sys
 import unittest
-from importlib import util
 from typing import List
 
 from setuptools import Command, find_packages, setup
 
 logger = logging.getLogger(__name__)
 
-# Kept manually in sync with airflow.__version__
-# noinspection PyUnresolvedReferences
-spec = util.spec_from_file_location("airflow.version", os.path.join('airflow', 'version.py'))
-# noinspection PyUnresolvedReferences
-mod = util.module_from_spec(spec)
-spec.loader.exec_module(mod)  # type: ignore
-version = mod.version  # type: ignore
+
+def fpath(*parts):
+    """Generate path to source file"""
+    return os.path.join(os.path.dirname(__file__), *parts)
+
+
+def read(*parts):
+    """Read contents of file from source"""
+    return open(fpath(*parts)).read()
+
+
+def find_version(*paths):
+    """Extract the version without importing any code"""
+    # https://packaging.python.org/guides/single-sourcing-package-version/
+    version_file = read(*paths)
+    version_match = re.search(r"^version = ['\"]([^'\"]*)['\"]", version_file, re.M)
+    if version_match:
+        return version_match.group(1)
+    raise RuntimeError("Unable to find version string.")
+
 
 PY3 = sys.version_info[0] == 3
 
 # noinspection PyUnboundLocalVariable
 try:
-    with io.open('README.md', encoding='utf-8') as f:
-        long_description = f.read()
+    long_description = read('README.md')
 except FileNotFoundError:
     long_description = ''
+
+version = find_version('airflow', 'version.py')
 
 
 def airflow_test_suite():
@@ -133,7 +146,7 @@ def git_version(version_: str) -> str:
         return 'no_git_version'
 
 
-def write_version(filename: str = os.path.join(*["airflow", "git_version"])):
+def write_version(filename: str = fpath("airflow", "git_version")):
     """
     Write the Semver version + git hash to file, e.g. ".dev0+2f635dc265e78db6708f59f68e8009abb92c1e65".
 
