@@ -111,6 +111,7 @@ function build_python_image {
     diff -ur compare-tmp/www airflow/www/ || true
 
     rm -rf compare-tmp tmp-cid
+    rm airflow/www/static/docs
 
     set +u
     set -x
