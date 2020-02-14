@@ -21,6 +21,7 @@ set -uo pipefail
 
 MY_DIR=$(cd "$(dirname "$0")" || exit 1; pwd)
 
+AIRFLOW_SOURCES="${AIRFLOW_SOURCES=:$MY_DIR/../../..}"
 # shellcheck source=scripts/ci/in_container/_in_container_utils.sh
 . "${MY_DIR}/_in_container_utils.sh"
 
