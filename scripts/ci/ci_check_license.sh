@@ -33,7 +33,7 @@ script_start
 
 rebuild_ci_image_if_needed
 
-if [[ ! -e "${AIRFLOW_SOURCES}/.build/$RAT_JAR" ]]; then
+if [[ ! -e "${AIRFLOW_SOURCES}/.build/apache-rat.jar" ]]; then
   pushd "${AIRFLOW_SOURCES}/.build"
   pushd "${AIRFLOW_SOURCES}/.build"
 
