@@ -106,6 +106,7 @@ function build_python_image {
 
     set +u
     set -x
+    git diff
     docker build \
         --build-arg PYTHON_BASE_IMAGE="${PYTHON_BASE_IMAGE}" \
         --build-arg AIRFLOW_VERSION="${AIRFLOW_VERSION}" \
