@@ -104,6 +104,14 @@ function build_python_image {
     echo "Build ${NAME} image: ${MY_IMAGE_TAG}"
     echo "Python base image: ${PYTHON_BASE_IMAGE}"
 
+    docker create --cidfile=tmp-cid  "${MY_IMAGE_TAG}"
+    mkdir compare-tmp
+    docker cp "$(cat tmp-cid)":/debug-context/airflow/www/ compare-tmp
+    docker rm "$(cat tmp-cid)"
+    diff -ur compare-tmp/www airflow/www/ || true
+
+    rm -rf compare-tmp tmp-cid
+
     set +u
     set -x
     git diff

@@ -345,6 +345,10 @@ RUN if [[ -n "${ADDITIONAL_PYTHON_DEPS}" ]]; then \
         pip install ${ADDITIONAL_PYTHON_DEPS}; \
     fi
 
+RUN mkdir -p /debug-context
+
+COPY . /debug-context
+
 ENV PATH="${HOME}:${PATH}"
 
 EXPOSE 8080
