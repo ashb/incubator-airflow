@@ -16,7 +16,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-set -uo pipefail
+set -euo pipefail
 
 MY_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -32,6 +32,18 @@ basic_sanity_checks
 script_start
 
 rebuild_ci_image_if_needed
+
+if [[ ! -e "${AIRFLOW_SOURCES}/.build/$RAT_JAR" ]]; then
+  pushd "${AIRFLOW_SOURCES}/.build"
+  pushd "${AIRFLOW_SOURCES}/.build"
+
+  docker create --cidfile tmp-docker-container-id "${AIRFLOW_CI_IMAGE}"
+  container_id="$(cat tmp-docker-container-id)"
+  rm tmp-docker-container-id
+
+  trap 'docker rm -f $container_id' "EXIT"
+  docker cp "$container_id:/opt/apache-rat.jar" .
+fi
 
 run_check_license
 

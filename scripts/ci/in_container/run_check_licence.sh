@@ -34,11 +34,11 @@ echo
 
 # This is the target of a symlink in airflow/www/static/docs -
 # and rat exclude doesn't cope with the symlink target doesn't exist
-sudo mkdir -p docs/_build/html/
+mkdir -p docs/_build/html/
 
 echo "Running license checks. This can take a while."
 
-if ! java -jar "/opt/apache-rat.jar" -E "${AIRFLOW_SOURCES}"/.rat-excludes \
+if ! java -jar "${AIRFLOW_SOURCES}/.build/apache-rat.jar" -E "${AIRFLOW_SOURCES}"/.rat-excludes \
     -d "${AIRFLOW_SOURCES}" | tee "${AIRFLOW_SOURCES}/logs/rat-results.txt" ; then
    echo >&2 "RAT exited abnormally"
    exit 1
@@ -47,8 +47,6 @@ fi
 ERRORS=$(grep -e "??" "${AIRFLOW_SOURCES}/logs/rat-results.txt")
 
 in_container_script_end
-
-in_container_fix_ownership
 
 if test ! -z "${ERRORS}"; then
     echo >&2

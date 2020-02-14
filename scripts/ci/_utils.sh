@@ -693,15 +693,12 @@ function run_docs() {
 
 function run_check_license() {
     docker run "${AIRFLOW_CONTAINER_EXTRA_DOCKER_FLAGS[@]}" -t \
-            --entrypoint "/usr/local/bin/dumb-init"  \
-            --env PYTHONDONTWRITEBYTECODE \
             --env AIRFLOW_CI_VERBOSE="${VERBOSE}" \
             --env AIRFLOW_CI_SILENT \
-            --env HOST_USER_ID="$(id -ur)" \
-            --env HOST_GROUP_ID="$(id -gr)" \
+            --user="$(id -ur):$(id -gr)" \
             --rm \
-            "${AIRFLOW_CI_IMAGE}" \
-            "--" "/opt/airflow/scripts/ci/in_container/run_check_licence.sh" \
+            "ibmjava:sfj" \
+            "/opt/airflow/scripts/ci/in_container/run_check_licence.sh" \
             | tee -a "${OUTPUT_LOG}"
 }
 

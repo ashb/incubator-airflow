@@ -110,15 +110,12 @@ RUN KEY="A4A9406876FCBD3C456770C88C718D3B5072E1F5" \
     && apt-get update \
     && apt-get install --no-install-recommends -y \
         libmysqlclient-dev \
-        mysql-client \
     && apt-get autoremove -yqq --purge \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN adduser airflow \
     && echo "airflow ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/airflow \
     && chmod 0440 /etc/sudoers.d/airflow
-
-ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/
 
 # Note missing man directories on debian-stretch
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=863199
@@ -136,61 +133,16 @@ RUN mkdir -pv /usr/share/man/man1 \
       less \
       lsb-release \
       net-tools \
-      openjdk-8-jdk \
       openssh-client \
       openssh-server \
       postgresql-client \
-      python-selinux \
       sqlite3 \
-      tmux \
       unzip \
       vim \
     && apt-get autoremove -yqq --purge \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-
-# Install Hadoop and Hive
-# It is done in one step to share variables.
-ENV HADOOP_HOME="/opt/hadoop-cdh" HIVE_HOME="/opt/hive"
-
-RUN HADOOP_DISTRO="cdh" \
-    && HADOOP_MAJOR="5" \
-    && HADOOP_DISTRO_VERSION="5.11.0" \
-    && HADOOP_VERSION="2.6.0" \
-    && HADOOP_URL="https://archive.cloudera.com/${HADOOP_DISTRO}${HADOOP_MAJOR}/${HADOOP_DISTRO}/${HADOOP_MAJOR}/"\
-    && HADOOP_DOWNLOAD_URL="${HADOOP_URL}hadoop-${HADOOP_VERSION}-${HADOOP_DISTRO}${HADOOP_DISTRO_VERSION}.tar.gz" \
-    && HADOOP_TMP_FILE="/tmp/hadoop.tar.gz" \
-    && mkdir -pv "${HADOOP_HOME}" \
-    && curl --fail --location "${HADOOP_DOWNLOAD_URL}" --output "${HADOOP_TMP_FILE}" \
-    && tar xzf "${HADOOP_TMP_FILE}" --absolute-names --strip-components 1 -C "${HADOOP_HOME}" \
-    && rm "${HADOOP_TMP_FILE}" \
-    && echo "Installing Hive" \
-    && HIVE_VERSION="1.1.0" \
-    && HIVE_URL="${HADOOP_URL}hive-${HIVE_VERSION}-${HADOOP_DISTRO}${HADOOP_DISTRO_VERSION}.tar.gz" \
-    && HIVE_VERSION="1.1.0" \
-    && HIVE_TMP_FILE="/tmp/hive.tar.gz" \
-    && mkdir -pv "${HIVE_HOME}" \
-    && mkdir -pv "/user/hive/warehouse" \
-    && chmod -R 777 "${HIVE_HOME}" \
-    && chmod -R 777 "/user/" \
-    && curl --fail --location  "${HIVE_URL}" --output "${HIVE_TMP_FILE}" \
-    && tar xzf "${HIVE_TMP_FILE}" --strip-components 1 -C "${HIVE_HOME}" \
-    && rm "${HIVE_TMP_FILE}"
-
-ENV PATH "${PATH}:/opt/hive/bin"
-
-# Install Minicluster
-ENV MINICLUSTER_HOME="/opt/minicluster"
-
-RUN MINICLUSTER_BASE="https://github.com/bolkedebruin/minicluster/releases/download/" \
-    && MINICLUSTER_VER="1.1" \
-    && MINICLUSTER_URL="${MINICLUSTER_BASE}${MINICLUSTER_VER}/minicluster-${MINICLUSTER_VER}-SNAPSHOT-bin.zip" \
-    && MINICLUSTER_TMP_FILE="/tmp/minicluster.zip" \
-    && mkdir -pv "${MINICLUSTER_HOME}" \
-    && curl --fail --location "${MINICLUSTER_URL}" --output "${MINICLUSTER_TMP_FILE}" \
-    && unzip "${MINICLUSTER_TMP_FILE}" -d "/opt" \
-    && rm "${MINICLUSTER_TMP_FILE}"
 
 # Install Docker
 RUN curl --fail --location https://download.docker.com/linux/debian/gpg | apt-key add - \
@@ -251,7 +203,7 @@ RUN RAT_TARGZ_FILE_NAME="apache-rat-${RAT_VERSION}-bin.tar.gz" \
     && mv -v /opt/"${RAT_JAR_IN_TAR}" "${RAT_JAR}" \
     && rm -vrf "${RAT_TAR_GZ}" "/opt/${RAT_FOLDER}" \
     && rm -f "${RAT_KEYS}" \
-    && jar -tf "${RAT_JAR}" >/dev/null
+    && unzip -l "${RAT_JAR}" >/dev/null
 
 # Setup PIP
 # By default PIP install run without cache to make image smaller
@@ -265,35 +217,6 @@ ENV PIP_VERSION=${PIP_VERSION}
 RUN echo "Pip version: ${PIP_VERSION}"
 
 RUN pip install --upgrade pip==${PIP_VERSION}
-
-# Install Google SDK
-ENV GCLOUD_HOME="/opt/gcloud"
-
-RUN GCLOUD_VERSION="274.0.1" \
-    && GCOUD_URL="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-${GCLOUD_VERSION}-linux-x86_64.tar.gz" \
-    && GCLOUD_TMP_FILE="/tmp/gcloud.tar.gz" \
-    && export CLOUDSDK_CORE_DISABLE_PROMPTS=1 \
-    && mkdir -p /opt/gcloud \
-    && curl "${GCOUD_URL}" -o "${GCLOUD_TMP_FILE}"\
-    && tar xzf "${GCLOUD_TMP_FILE}" --strip-components 1 -C "${GCLOUD_HOME}" \
-    && rm -rf "${GCLOUD_TMP_FILE}" \
-    && echo '. /opt/gcloud/completion.bash.inc' >> /etc/bash.bashrc
-
-ENV PATH="$PATH:${GCLOUD_HOME}/bin"
-
-# Install AWS CLI
-# Unfortunately, AWS does not provide a versioned bundle
-ENV AWS_HOME="/opt/aws"
-
-RUN AWS_TMP_DIR="/tmp/awscli/" \
-    && AWS_TMP_BUNDLE="${AWS_TMP_DIR}/awscli-bundle.zip" \
-    && AWS_URL="https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" \
-    && mkdir -pv "${AWS_TMP_DIR}" \
-    && curl "${AWS_URL}" -o "${AWS_TMP_BUNDLE}" \
-    && unzip "${AWS_TMP_BUNDLE}" -d "${AWS_TMP_DIR}" \
-    && "${AWS_TMP_DIR}/awscli-bundle/install" -i "${AWS_HOME}" -b /usr/local/bin/aws \
-    && echo "complete -C '${AWS_HOME}/bin/aws_completer' aws" >> /etc/bash.bashrc \
-    && rm -rf "${AWS_TMP_DIR}"
 
 ARG HOME=/root
 ENV HOME=${HOME}
@@ -362,11 +285,7 @@ RUN ln -sf /usr/bin/dumb-init /usr/local/bin/dumb-init
 # Rather than after setup.py is added.
 COPY airflow/www/yarn.lock airflow/www/package.json ${AIRFLOW_SOURCES}/airflow/www/
 
-WORKDIR ${AIRFLOW_SOURCES}/airflow/www
-
-RUN yarn install --frozen-lockfile
-
-WORKDIR ${AIRFLOW_SOURCES}
+RUN yarn --cwd=airflow/www/ install --frozen-lockfile
 
 # Note! We are copying everything with airflow:airflow user:group even if we use root to run the scripts
 # This is fine as root user will be able to use those dirs anyway.
@@ -386,13 +305,11 @@ COPY airflow/bin/airflow ${AIRFLOW_SOURCES}/airflow/bin/airflow
 # In non-CI optimized build this will install all dependencies before installing sources.
 RUN pip install -e ".[${AIRFLOW_EXTRAS}]"
 
-WORKDIR ${AIRFLOW_SOURCES}/airflow/www
-
 # Copy all www files here so that we can run yarn building for production
 COPY airflow/www/ ${AIRFLOW_SOURCES}/airflow/www/
 
 # Package NPM for production
-RUN yarn run prod
+RUN yarn --cwd=airflow/www/ run prod
 
 COPY scripts/docker/entrypoint.sh /entrypoint.sh
 
@@ -420,16 +337,12 @@ RUN register-python-argcomplete airflow >> ~/.bashrc
 RUN echo "source /etc/bash_completion" >> ~/.bashrc \
     && kubectl completion bash >> ~/.bashrc
 
-WORKDIR ${AIRFLOW_SOURCES}
-
 # Additional python deps to install
 ARG ADDITIONAL_PYTHON_DEPS=""
 
 RUN if [[ -n "${ADDITIONAL_PYTHON_DEPS}" ]]; then \
         pip install ${ADDITIONAL_PYTHON_DEPS}; \
     fi
-
-WORKDIR ${AIRFLOW_SOURCES}
 
 ENV PATH="${HOME}:${PATH}"
 
