@@ -99,7 +99,7 @@ function build_python_image {
     MY_IMAGE_TAG="${2}"
     TARGET_IMAGE="${3}"
     AIRFLOW_EXTRAS="${4:-all}"
-    HOME="${6:-/home/airflow}"
+    HOMEDIR="${6:-/home/airflow}"
 
     echo "Build ${NAME} image: ${MY_IMAGE_TAG}"
     echo "Python base image: ${PYTHON_BASE_IMAGE}"
@@ -111,7 +111,7 @@ function build_python_image {
     diff -ur compare-tmp/www airflow/www/ || true
 
     rm -rf compare-tmp tmp-cid
-    rm airflow/www/static/docs
+    rm -rfv airflow/www/static/docs
 
     set +u
     set -x
@@ -122,7 +122,7 @@ function build_python_image {
         --build-arg AIRFLOW_EXTRAS="${AIRFLOW_EXTRAS}" \
         --build-arg AIRFLOW_BRANCH="${AIRFLOW_CONTAINER_BRANCH_NAME}" \
         --build-arg AIRFLOW_CONTAINER_CI_OPTIMISED_BUILD="${AIRFLOW_CONTAINER_CI_OPTIMISED_BUILD}" \
-        --build-arg HOME="${HOME}" \
+        --build-arg HOME="${HOMEDIR}" \
         "${DOCKER_CACHE_DIRECTIVE_CI[@]}" \
         -t "${MY_IMAGE_TAG}" \
         --target "${TARGET_IMAGE}" \

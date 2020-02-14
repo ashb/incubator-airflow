@@ -307,7 +307,8 @@ RUN mkdir -p airflow/bin/ \
     && rm airflow/bin/airflow
 
 # Copy all www files here so that we can run yarn building for production
-COPY airflow/www/ ${AIRFLOW_SOURCES}/airflow/www/
+COPY airflow/www/webpack.config.js  ${AIRFLOW_SOURCES}/airflow/www/
+COPY airflow/www/static  ${AIRFLOW_SOURCES}/airflow/www/static/
 
 # Package NPM for production
 RUN yarn --cwd=airflow/www/ run prod
