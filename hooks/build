@@ -108,7 +108,7 @@ function build_python_image {
     mkdir compare-tmp
     docker cp "$(cat tmp-cid)":/debug-context/airflow/www/ compare-tmp
     docker rm "$(cat tmp-cid)"
-    diff -ur compare-tmp/www airflow/www/ || true
+    diff -ur <(cd compare-temp; find . -exec ls -altr {} +) <(cd airflow/www; find . -exec ls -altr {} +)
 
     rm -rf compare-tmp tmp-cid
     rm -rfv airflow/www/static/docs
