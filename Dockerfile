@@ -118,8 +118,6 @@ RUN adduser airflow \
     && echo "airflow ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/airflow \
     && chmod 0440 /etc/sudoers.d/airflow
 
-ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/
-
 # Note missing man directories on debian-stretch
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=863199
 RUN mkdir -pv /usr/share/man/man1 \
@@ -136,7 +134,6 @@ RUN mkdir -pv /usr/share/man/man1 \
       less \
       lsb-release \
       net-tools \
-      openjdk-8-jdk \
       openssh-client \
       openssh-server \
       postgresql-client \
@@ -148,49 +145,6 @@ RUN mkdir -pv /usr/share/man/man1 \
     && apt-get autoremove -yqq --purge \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
-
-# Install Hadoop and Hive
-# It is done in one step to share variables.
-ENV HADOOP_HOME="/opt/hadoop-cdh" HIVE_HOME="/opt/hive"
-
-RUN HADOOP_DISTRO="cdh" \
-    && HADOOP_MAJOR="5" \
-    && HADOOP_DISTRO_VERSION="5.11.0" \
-    && HADOOP_VERSION="2.6.0" \
-    && HADOOP_URL="https://archive.cloudera.com/${HADOOP_DISTRO}${HADOOP_MAJOR}/${HADOOP_DISTRO}/${HADOOP_MAJOR}/"\
-    && HADOOP_DOWNLOAD_URL="${HADOOP_URL}hadoop-${HADOOP_VERSION}-${HADOOP_DISTRO}${HADOOP_DISTRO_VERSION}.tar.gz" \
-    && HADOOP_TMP_FILE="/tmp/hadoop.tar.gz" \
-    && mkdir -pv "${HADOOP_HOME}" \
-    && curl --fail --location "${HADOOP_DOWNLOAD_URL}" --output "${HADOOP_TMP_FILE}" \
-    && tar xzf "${HADOOP_TMP_FILE}" --absolute-names --strip-components 1 -C "${HADOOP_HOME}" \
-    && rm "${HADOOP_TMP_FILE}" \
-    && echo "Installing Hive" \
-    && HIVE_VERSION="1.1.0" \
-    && HIVE_URL="${HADOOP_URL}hive-${HIVE_VERSION}-${HADOOP_DISTRO}${HADOOP_DISTRO_VERSION}.tar.gz" \
-    && HIVE_VERSION="1.1.0" \
-    && HIVE_TMP_FILE="/tmp/hive.tar.gz" \
-    && mkdir -pv "${HIVE_HOME}" \
-    && mkdir -pv "/user/hive/warehouse" \
-    && chmod -R 777 "${HIVE_HOME}" \
-    && chmod -R 777 "/user/" \
-    && curl --fail --location  "${HIVE_URL}" --output "${HIVE_TMP_FILE}" \
-    && tar xzf "${HIVE_TMP_FILE}" --strip-components 1 -C "${HIVE_HOME}" \
-    && rm "${HIVE_TMP_FILE}"
-
-ENV PATH "${PATH}:/opt/hive/bin"
-
-# Install Minicluster
-ENV MINICLUSTER_HOME="/opt/minicluster"
-
-RUN MINICLUSTER_BASE="https://github.com/bolkedebruin/minicluster/releases/download/" \
-    && MINICLUSTER_VER="1.1" \
-    && MINICLUSTER_URL="${MINICLUSTER_BASE}${MINICLUSTER_VER}/minicluster-${MINICLUSTER_VER}-SNAPSHOT-bin.zip" \
-    && MINICLUSTER_TMP_FILE="/tmp/minicluster.zip" \
-    && mkdir -pv "${MINICLUSTER_HOME}" \
-    && curl --fail --location "${MINICLUSTER_URL}" --output "${MINICLUSTER_TMP_FILE}" \
-    && unzip "${MINICLUSTER_TMP_FILE}" -d "/opt" \
-    && rm "${MINICLUSTER_TMP_FILE}"
 
 # Install Docker
 RUN curl --fail --location https://download.docker.com/linux/debian/gpg | apt-key add - \
@@ -213,45 +167,6 @@ ARG KIND_VERSION="v0.6.1"
 RUN KIND_URL="https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64" \
    && curl --fail --location "${KIND_URL}" --output "/usr/local/bin/kind" \
    && chmod +x /usr/local/bin/kind
-
-# Install Apache RAT
-ARG RAT_VERSION="0.13"
-ARG RAT_BACKUP_SITE_1="https://www-eu.apache.org/dist/creadur"
-ARG RAT_BACKUP_SITE_2="https://www-us.apache.org/dist/creadur"
-# It's OK to use HTTP rather than https here as we verify it later with gpg from the
-# offcial backup servers of Apache!
-ARG RAT_MIRROR_1="http://mirror.serverion.com/apache/creadur"
-ARG RAT_MIRROR_2="http://mirror.cc.columbia.edu/pub/software/apache/creadur"
-
-RUN RAT_TARGZ_FILE_NAME="apache-rat-${RAT_VERSION}-bin.tar.gz" \
-    && RAT_FOLDER="apache-rat-${RAT_VERSION}" \
-    && RAT_KEYS_URL_1="${RAT_BACKUP_SITE_1}/KEYS" \
-    && RAT_KEYS_URL_2="${RAT_BACKUP_SITE_2}/KEYS"  \
-    && RAT_ASC_URL_1="${RAT_BACKUP_SITE_1}/${RAT_FOLDER}/${RAT_TARGZ_FILE_NAME}.asc" \
-    && RAT_ASC_URL_2="${RAT_BACKUP_SITE_2}/${RAT_FOLDER}/${RAT_TARGZ_FILE_NAME}.asc" \
-    && RAT_URL_1="${RAT_MIRROR_1}/${RAT_FOLDER}/${RAT_TARGZ_FILE_NAME}" \
-    && RAT_URL_2="${RAT_MIRROR_2}/${RAT_FOLDER}/${RAT_TARGZ_FILE_NAME}"  \
-    && RAT_TAR_GZ="/opt/${RAT_TARGZ_FILE_NAME}" \
-    && RAT_TAR_GZ_ASC="/opt/${RAT_TARGZ_FILE_NAME}.asc" \
-    && RAT_KEYS="/opt/KEYS" \
-    && RAT_JAR_IN_TAR="${RAT_FOLDER}/apache-rat-${RAT_VERSION}.jar" \
-    && RAT_JAR="/opt/apache-rat.jar" \
-    && echo "Downloading KEYS from backup Apache servers: ${RAT_KEYS_URL_1}, ${RAT_KEYS_URL_2}" \
-    && (curl --fail --location "${RAT_KEYS_URL_1}" --output "${RAT_KEYS}" || \
-        curl --fail --location "${RAT_KEYS_URL_2}" --output "${RAT_KEYS}") \
-    && echo "Downloading ASC from backup Apache servers: ${RAT_ASC_URL_1}, ${RAT_ASC_URL_2}" \
-    && (curl --fail --location "${RAT_ASC_URL_1}" --output "${RAT_TAR_GZ_ASC}" || \
-        curl --fail --location "${RAT_ASC_URL_2}" --output "${RAT_TAR_GZ_ASC}") \
-    && echo "Downloading RAT from mirrors: ${RAT_URL_1}, ${RAT_URL_2} to ${RAT_JAR}" \
-    && (curl --fail --location "${RAT_URL_1}" --output "${RAT_TAR_GZ}" || \
-        curl --fail --location "${RAT_URL_2}" --output "${RAT_TAR_GZ}") \
-    && gpg --import ${RAT_KEYS} \
-    && gpg --verify "${RAT_TAR_GZ_ASC}" "${RAT_TAR_GZ}" \
-    && tar --extract --gzip --file "${RAT_TAR_GZ}" -C /opt "${RAT_JAR_IN_TAR}" \
-    && mv -v /opt/"${RAT_JAR_IN_TAR}" "${RAT_JAR}" \
-    && rm -vrf "${RAT_TAR_GZ}" "/opt/${RAT_FOLDER}" \
-    && rm -f "${RAT_KEYS}" \
-    && jar -tf "${RAT_JAR}" >/dev/null
 
 # Setup PIP
 # By default PIP install run without cache to make image smaller

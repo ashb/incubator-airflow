@@ -35,6 +35,15 @@ if not snakebite_loaded:
     )
 
 
+# Note: this will fail once the snakebite problem is sorted out. We have
+# removed java from our image, so the minihadoop cluster is no longer running
+# in the CI image. The fix should be do either:
+#
+# - Use mocks/stubs here so that we don't need HDFS running (Some of theses
+#   tests are testing the behaviour of HDFS/snakebite, not just the airflow code
+#   which is not the - things like this belong in a system/integration test, not
+#   unit)
+# - Run bolkedeburiun/minicluster docker image along side
 class TestHDFSHook(unittest.TestCase):
     @mock.patch.dict('os.environ', {
         'AIRFLOW_CONN_HDFS_DEFAULT': 'hdfs://localhost:8020',
