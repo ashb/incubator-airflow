@@ -108,10 +108,9 @@ function build_python_image {
     mkdir compare-tmp
     docker cp "$(cat tmp-cid)":/debug-context/airflow/www/ compare-tmp
     docker rm "$(cat tmp-cid)"
-    diff -ur <(cd compare-tmp; find . -exec stat --printf "%a %A %F %s %n\n" {} +) <(cd airflow/www; find . -exec stat --printf "%a %A %F %s %n\n" {} +)
+    diff -ur <(cd compare-tmp; find . -exec stat --printf "%a %A %F %s %n\n" {} +) <(cd airflow/www; find . -exec stat --printf "%a %A %F %s %n\n" {} +) || true
 
     rm -rf compare-tmp tmp-cid
-    rm -rfv airflow/www/static/docs
 
     set +u
     set -x
@@ -373,10 +372,6 @@ fi
 
 start_step "Creating deployment directory"
 
-STAT_BIN=stat
-if [[ "${OSTYPE}" == "darwin"* ]]; then
-    STAT_BIN=gstat
-fi
 # Build id identifying the build uniquely
 BUILD_ID=${BUILD_ID:="local"}
 
@@ -399,28 +394,7 @@ mkdir -pv "${DEPLOY_DIR}"
 #
 # We fix it by removing write permissions for other/group for all files that are in the Docker context.
 #
-STAT_BIN=stat
-if [[ "${OSTYPE}" == "darwin"* ]]; then
-    STAT_BIN=gstat
-fi
-
-for FILE in "${FILES_FOR_REBUILD_CHECK[@]}"; do
-    ACCESS_RIGHTS=$("${STAT_BIN}" -c "%A" "${AIRFLOW_SOURCES}/${FILE}" || echo "--------")
-    # check if the file is group/other writeable
-    if [[ "${ACCESS_RIGHTS:5:1}" != "-" || "${ACCESS_RIGHTS:8:1}" != "-" ]]; then
-        if [[ "${VERBOSE_FIX_FILE:="false"}" == "true" ]]; then
-            "${STAT_BIN}" --printf "%a %A %F \t%s \t->    " "${AIRFLOW_SOURCES}/${FILE}"
-        fi
-        chmod og-w "${AIRFLOW_SOURCES}/${FILE}"
-        if [[ "${VERBOSE_FIX_FILE:="false"}" == "true" ]]; then
-            "${STAT_BIN}" --printf "%a %A %F \t%s \t%n\n" "${AIRFLOW_SOURCES}/${FILE}"
-        fi
-    fi
-done
-
-echo "Group/other write access removed for ${FILES_FOR_REBUILD_CHECK[*]}"
-echo
-echo
+git ls-files | grep -v airflow/www/static/docs | xargs chmod --changes og-w
 
 if [[ "${AIRFLOW_CONTAINER_SKIP_CI_IMAGE}" == "true" ]]; then
     echo "Skip building the CI full Airflow image"
