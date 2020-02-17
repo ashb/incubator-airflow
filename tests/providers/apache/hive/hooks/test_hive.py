@@ -26,6 +26,7 @@ from collections import OrderedDict
 from unittest import mock
 
 import pandas as pd
+import pytest
 from hmsclient import HMSClient
 
 from airflow import DAG
@@ -36,13 +37,15 @@ from airflow.providers.apache.hive.operators.hive import HiveOperator
 from airflow.utils import timezone
 from airflow.utils.operator_helpers import AIRFLOW_VAR_NAME_FORMAT_MAPPING
 from tests.test_utils.asserts import assert_equal_ignore_multiple_spaces
+from tests.test_utils.system_tests_class import SystemTest
 
 DEFAULT_DATE = timezone.datetime(2015, 1, 1)
 DEFAULT_DATE_ISO = DEFAULT_DATE.isoformat()
 DEFAULT_DATE_DS = DEFAULT_DATE_ISO[:10]
 
 
-class TestHiveEnvironment(unittest.TestCase):
+@pytest.mark.integration("hive")
+class TestHiveEnvironment(SystemTest):
 
     def setUp(self):
         args = {'owner': 'airflow', 'start_date': DEFAULT_DATE}
