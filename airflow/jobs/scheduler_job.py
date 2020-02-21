@@ -668,7 +668,7 @@ class DagFileProcessor(LoggingMixin):
                     self.log.debug('Queuing task: %s', ti)
                     task_instances_list.append(ti.key)
 
-    def _process_dags(self, dagbag, dags, tis_out):
+    def _process_dags(self, dags, tis_out):
         """
         Iterates over the dags and processes them. Processing includes:
 
@@ -676,8 +676,6 @@ class DagFileProcessor(LoggingMixin):
         2. Create appropriate TaskInstance(s) in the DB.
         3. Send emails for tasks that have missed SLAs (if CHECK_SLAS config enabled).
 
-        :param dagbag: a collection of DAGs to process
-        :type dagbag: airflow.models.DagBag
         :param dags: the DAGs from the DagBag to process
         :type dags: List[airflow.models.DAG]
         :param tis_out: A list to add generated TaskInstance objects
@@ -686,10 +684,6 @@ class DagFileProcessor(LoggingMixin):
         """
         check_slas = conf.getboolean('core', 'CHECK_SLAS', fallback=True)
         for dag in dags:
-            dag = dagbag.get_dag(dag.dag_id)
-            if not dag:
-                self.log.error("DAG ID %s was not found in the DagBag", dag.dag_id)
-                continue
 
             if dag.is_paused:
                 self.log.info("Not processing DAG %s since it's paused", dag.dag_id)
@@ -800,7 +794,7 @@ class DagFileProcessor(LoggingMixin):
         ti_keys_to_schedule = []
         refreshed_tis = []
 
-        self._process_dags(dagbag, dags, ti_keys_to_schedule)
+        self._process_dags(dags, ti_keys_to_schedule)
 
         # Refresh all task instances that will be scheduled
         TI = models.TaskInstance
