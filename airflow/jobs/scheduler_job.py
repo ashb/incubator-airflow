@@ -672,8 +672,7 @@ class DagFileProcessor(LoggingMixin):
                     self.log.debug('Queuing task: %s', ti)
                     task_instances_list.append(ti.key)
 
-    @provide_session
-    def _process_dags(self, dags, tis_out, session=None):
+    def _process_dags(self, dags, tis_out):
         """
         Iterates over the dags and processes them. Processing includes:
 
@@ -812,10 +811,9 @@ class DagFileProcessor(LoggingMixin):
         )
 
         # Pickle the DAGs (if necessary) and put them into a SimpleDag
-        for dag_id in dagbag.dags:
+        for dag_id, dag in dagbag.dags.items():
             # Only return DAGs that are not paused
             if dag_id not in paused_dag_ids:
-                dag = dagbag.get_dag(dag_id)
                 pickle_id = None
                 if pickle_dags:
                     pickle_id = dag.pickle(session).id
