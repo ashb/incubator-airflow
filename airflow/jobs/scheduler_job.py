@@ -27,6 +27,7 @@ import time
 from collections import defaultdict
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import timedelta
+from itertools import groupby
 from typing import List, Set
 
 from setproctitle import setproctitle
@@ -631,7 +632,7 @@ class DagFileProcessor(LoggingMixin):
                 return next_run
 
     @provide_session
-    def _process_task_instances(self, dag, task_instances_list, session=None):
+    def _process_task_instances(self, dag, dag_runs, session=None):
         """
         This method schedules the tasks for a single DAG by looking at the
         active DAG runs and adding task instances that should run to the
@@ -639,8 +640,8 @@ class DagFileProcessor(LoggingMixin):
         """
 
         # update the state of the previously active dag runs
-        dag_runs = DagRun.find(dag_id=dag.dag_id, state=State.RUNNING, session=session)
         active_dag_runs = 0
+        task_instances_list = []
         for run in dag_runs:
             self.log.info("Examining DAG run %s", run)
             # don't consider runs that are executed in the future unless
@@ -671,8 +672,10 @@ class DagFileProcessor(LoggingMixin):
                 for ti in ready_tis:
                     self.log.debug('Queuing task: %s', ti)
                     task_instances_list.append(ti.key)
+        return task_instances_list
 
-    def _process_dags(self, dags, tis_out):
+    @provide_session
+    def _process_dags(self, dagbag, dags, session=None):
         """
         Iterates over the dags and processes them. Processing includes:
 
@@ -682,30 +685,70 @@ class DagFileProcessor(LoggingMixin):
 
         :param dags: the DAGs from the DagBag to process
         :type dags: List[airflow.models.DAG]
-        :param tis_out: A list to add generated TaskInstance objects
-        :type tis_out: list[TaskInstance]
-        :rtype: None
+        :rtype: list[TaskInstance]
+        :return: A list of generated TaskInstance objects
         """
         check_slas = conf.getboolean('core', 'CHECK_SLAS', fallback=True)
 
+        tis_out = []
+        dag_ids = [dag.dag_id for dag in dags]
+        dag_runs = DagRun.find(dag_ids=dag_ids, state=State.RUNNING, session=session)
+        # list() is needed because of a bug in Python 3.7+
+        #
+        # The following code returns different values depending on the Python version
+        # from itertools import groupby
+        # from unittest.mock import MagicMock
+        # key = "key"
+        # item = MagicMock(attr=key)
+        # items = [item]
+        # items_by_attr = {k: v for k, v in groupby(items, lambda d: d.attr)}
+        # print("items_by_attr=", items_by_attr)
+        # item_with_key = list(items_by_attr[key]) if key in items_by_attr else []
+        # print("item_with_key=", item_with_key)
+        #
+        # Python 3.7+:
+        # items_by_attr= {'key': <itertools._grouper object at 0x7f3b9f38d4d0>}
+        # item_with_key= []
+        #
+        # Python 3.6:
+        # items_by_attr= {'key': <itertools._grouper object at 0x101128630>}
+        # item_with_key= [<MagicMock id='4310405416'>]
+        dag_runs_by_dag_id = {k: list(v) for k, v in groupby(dag_runs, lambda d: d.dag_id)}
+
         for dag in dags:
-            self.log.info("Processing %s", dag.dag_id)
+            dag = dagbag.get_dag(dag.dag_id)
+            if not dag:
+                self.log.error("DAG ID %s was not found in the DagBag", dag.dag_id)
+                continue
+
+            if dag.is_paused:
+                self.log.info("Not processing DAG %s since it's paused", dag.dag_id)
+                continue
+
+            dag_id = dag.dag_id
+            self.log.info("Processing %s", dag_id)
+            dag_runs_for_dag = dag_runs_by_dag_id[dag_id] if dag_id in dag_runs_by_dag_id else []
 
             # Only creates DagRun for DAGs that are not subdag since
             # DagRun of subdags are created when SubDagOperator executes.
             if not dag.is_subdag:
                 dag_run = self.create_dag_run(dag)
                 if dag_run:
+                    dag_runs_for_dag.append(dag_run)
                     expected_start_date = dag.following_schedule(dag_run.execution_date)
                     if expected_start_date:
                         schedule_delay = dag_run.start_date - expected_start_date
                         Stats.timing(
                             'dagrun.schedule_delay.{dag_id}'.format(dag_id=dag.dag_id),
                             schedule_delay)
-                self.log.info("Created %s", dag_run)
-            self._process_task_instances(dag, tis_out)
-            if check_slas:
-                self.manage_slas(dag)
+                    self.log.info("Created %s", dag_run)
+
+            if dag_runs_for_dag:
+                tis_out.extend(self._process_task_instances(dag, dag_runs_for_dag))
+                if check_slas:
+                    self.manage_slas(dag)
+
+        return tis_out
 
     def _find_dags_to_process(self, dags: List[DAG], paused_dag_ids: Set[str]):
         """
@@ -821,17 +864,13 @@ class DagFileProcessor(LoggingMixin):
 
         dags = self._find_dags_to_process(dagbag.dags.values(), paused_dag_ids)
 
-        # Not using multiprocessing.Queue() since it's no longer a separate
-        # process and due to some unusual behavior. (empty() incorrectly
-        # returns true as described in https://bugs.python.org/issue23582 )
-        ti_keys_to_schedule = []
-        refreshed_tis = []
-
-        self._process_dags(dags, ti_keys_to_schedule)
+        ti_keys_to_schedule = self._process_dags(dagbag, dags, session)
 
         # Refresh all task instances that will be scheduled
         TI = models.TaskInstance
         filter_for_tis = TI.filter_for_tis(ti_keys_to_schedule)
+
+        refreshed_tis = []
 
         if filter_for_tis is not None:
             refreshed_tis = session.query(TI).filter(filter_for_tis).with_for_update().all()
@@ -870,7 +909,7 @@ class DagFileProcessor(LoggingMixin):
         except Exception:
             self.log.exception("Error logging import errors!")
         try:
-            self.kill_zombies(zombies)
+            self.kill_zombies(dagbag, zombies)
         except Exception:
             self.log.exception("Error killing zombies!")
 
@@ -1582,7 +1621,7 @@ class SchedulerJob(BaseJob):
                 self.processor_agent.wait_until_finished()
 
             simple_dags = self._get_simple_dags()
-            self.log.debug("Harvested {} SimpleDAGs".format(len(simple_dags)))
+            self.log.debug("Harvested %s SimpleDAGs", len(simple_dags))
 
             # Send tasks for execution if available
             simple_dag_bag = SimpleDagBag(simple_dags)

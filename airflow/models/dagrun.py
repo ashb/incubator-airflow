@@ -125,14 +125,16 @@ class DagRun(Base, LoggingMixin):
 
     @staticmethod
     @provide_session
-    def find(dag_id=None, run_id=None, execution_date=None,
+    def find(dag_id=None, dag_ids=None, run_id=None, execution_date=None,
              state=None, external_trigger=None, no_backfills=False,
              session=None, execution_start_date=None, execution_end_date=None):
         """
         Returns a set of dag runs for the given search criteria.
 
         :param dag_id: the dag_id to find dag runs for
-        :type dag_id: int, list
+        :type dag_id: str
+        :param dag_ids: the list of dag_id to find dag runs for
+        :type dag_ids: list of str
         :param run_id: defines the run id for this dag run
         :type run_id: str
         :param execution_date: the execution date
@@ -154,8 +156,16 @@ class DagRun(Base, LoggingMixin):
         DR = DagRun
 
         qry = session.query(DR)
+
+        if dag_ids and dag_id:
+            raise AirflowException(
+                "dag_id and dag_ids parameters are mutually exclusive. "
+                "Please pass only one value."
+            )
         if dag_id:
-            qry = qry.filter(DR.dag_id == dag_id)
+            dag_ids = [dag_id]
+        if dag_ids:
+            qry = qry.filter(DR.dag_id.in_(dag_ids))
         if run_id:
             qry = qry.filter(DR.run_id == run_id)
         if execution_date:
