@@ -20,7 +20,7 @@ name: 'Set CI secrets'
 description: 'Decrypts secrets.yml and sets them for the rest of the jobs'
 inputs:
   gpgPrivateKey:  # id of input
-    description: 'Ascii-armored GPG private key able to decrypt secrets.yaml'
+    description: 'ASCII-armored GPG private key able to decrypt secrets.yaml'
     required: true
 runs:
   using: 'docker'
