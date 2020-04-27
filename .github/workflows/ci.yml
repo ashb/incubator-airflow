@@ -79,7 +79,7 @@ jobs:
       - uses: actions/checkout@master
       - name: export secrets
         env:
-          GPG_PRIV_KEY: ${{ secretsGpgPrivKey }}
+          GPG_PRIV_KEY: ${{ secrets.secretsGpgPrivKey }}
         run: |
           ./scripts/ci/set_ci_secrets.sh --for-github --import-privkey-from-env GPG_PRIV_KEY
 
