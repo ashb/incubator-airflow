@@ -72,6 +72,17 @@ jobs:
               --constraint requirements/requirements-python${PYTHON_MAJOR_MINOR_VERSION}.txt
           ./scripts/ci/ci_run_static_checks.sh pylint-tests mypy yamllint flake8
 
+  set-secrets:
+    name: Set secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+      - name: export secrets
+        env:
+          GPG_PRIV_KEY: ${{ secretsGpgPrivKey }}
+        run: |
+          ./scripts/ci/set_ci_secrets.sh --for-github --import-privkey-from-env GPG_PRIV_KEY
+
   static-checks-2:
     timeout-minutes: 60
     name: "Checks: all other"

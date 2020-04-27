@@ -477,7 +477,7 @@ devel_all = (all_dbs + atlas + aws + azure + celery + cgroups + dask + datadog +
              elasticsearch + exasol + facebook + gcp + grpc + hashicorp + jdbc + jenkins + kerberos +
              kubernetes + ldap + odbc + oracle + pagerduty + papermill + password + redis + salesforce +
              samba + segment + sendgrid + sentry + singularity + slack + snowflake + ssh + statsd + tableau +
-             virtualenv + webhdfs + yandexcloud + zendesk)
+             virtualenv + webhdfs + yandexcloud + zendesk + ['encrypteddict'])
 
 # Snakebite is not Python 3 compatible :'(
 if PY3:
