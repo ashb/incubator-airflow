@@ -31,8 +31,8 @@ rebuild_ci_image_if_needed
 
 docker run "${EXTRA_DOCKER_FLAGS[@]}" -t \
         --rm \
+        --entrypoint ./dev/airflow-ci-secrets \
         "${AIRFLOW_CI_IMAGE}" \
         "--" \
-        ./dev/airflow-ci-secrets \
         export \
         "$@"
