@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # Licensed to the Apache Software Foundation (ASF) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
@@ -16,23 +15,20 @@
 # specific language governing permissions and limitations
 # under the License.
 
-# Set and export variables from .github/secrets.yaml in to the Github Actions
-# pipeline
-
-export PYTHON_MAJOR_MINOR_VERSION=${PYTHON_MAJOR_MINOR_VERSION:-3.6}
-
-# shellcheck source=scripts/ci/_script_init.sh
-. "$( dirname "${BASH_SOURCE[0]}" )/_script_init.sh"
-
-
-prepare_ci_build
-
-rebuild_ci_image_if_needed
-
-docker run "${EXTRA_DOCKER_FLAGS[@]}" -t \
-        --rm \
-        --entrypoint ./dev/airflow-ci-secrets \
-        "${AIRFLOW_CI_IMAGE}" \
-        "--" \
-        export \
-        "$@"
+---
+name: 'Set CI secrets'
+description: 'Decrypts secrets.yml and sets them for the rest of the jobs'
+inputs:
+  gpgPrivateKey:  # id of input
+    description: 'Ascii-armored GPG private key able to decrypt secrets.yaml'
+    required: true
+runs:
+  using: 'docker'
+  image: 'docker://local/airflow:master-python3.6-ci'
+  env:
+    GPG_PRIV_KEY: "${{ inputs.gpgPrivateKey }}"
+  entrypoint: ["./dev/airflow-ci-secrets", "export"]
+  args:
+    - "--for-github"
+    - "--import-privkey-from-env"
+    - "GPG_PRIV_KEY"

@@ -77,11 +77,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
-      - name: export secrets
-        env:
-          GPG_PRIV_KEY: ${{ secrets.secretsGpgPrivKey }}
-        run: |
-          ./scripts/ci/set_ci_secrets.sh --for-github --import-privkey-from-env GPG_PRIV_KEY
+      - uses: ./.github/actions/set-ci-secrets-from-yaml
+        with:
+          gpgPrivateKey: ${{ secrets.secretsGpgPrivKey }}
 
   static-checks-2:
     timeout-minutes: 60
