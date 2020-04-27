@@ -75,8 +75,14 @@ jobs:
   set-secrets:
     name: Set secrets
     runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: 3.6
+      AIRFLOW_MOUNT_SOURCE_DIR_FOR_STATIC_CHECKS: "true"
     steps:
       - uses: actions/checkout@master
+      - uses: actions/setup-python@v1
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
       - name: "Before install"
         run: ./scripts/ci/ci_before_install.sh
       - uses: ./.github/actions/set-ci-secrets-from-yaml
