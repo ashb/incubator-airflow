@@ -77,6 +77,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
+      - name: "Before install"
+        run: ./scripts/ci/ci_before_install.sh
       - uses: ./.github/actions/set-ci-secrets-from-yaml
         with:
           gpgPrivateKey: ${{ secrets.secretsGpgPrivKey }}
