@@ -24,7 +24,7 @@ inputs:
     required: true
 runs:
   using: 'docker'
-  image: 'docker://local/airflow:master-python3.6-ci'
+  image: 'docker://airflow:master-python3.6-ci'
   env:
     GPG_PRIV_KEY: "${{ inputs.gpgPrivateKey }}"
   entrypoint: "./dev/airflow-ci-secrets"
