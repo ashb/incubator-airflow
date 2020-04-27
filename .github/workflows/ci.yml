@@ -88,6 +88,29 @@ jobs:
       - uses: ./.github/actions/set-ci-secrets-from-yaml
         with:
           gpgPrivateKey: ${{ secrets.secretsGpgPrivKey }}
+      - name: "Test secrets"
+        run: |
+          echo value3
+          if [[ "$enc" == "value3" ]]; then
+            echo Was Set
+          else
+            echo Not set
+          fi
+
+  chekc-secrets:
+    name: Set secrets
+    runs-on: ubuntu-latest
+    needs: [set-secrets]
+    steps:
+      - name: "Test secrets"
+        run: |
+          docker images
+          echo value3
+          if [[ "$enc" == "value3" ]]; then
+            echo Was Set
+          else
+            echo Not set
+          fi
 
   static-checks-2:
     timeout-minutes: 60

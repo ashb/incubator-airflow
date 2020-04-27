@@ -30,6 +30,6 @@ runs:
   entrypoint: "./dev/airflow-ci-secrets"
   args:
     - "export"
-    - "--for-github"
+    - "--format=github"
     - "--import-privkey-from-env"
     - "GPG_PRIV_KEY"
