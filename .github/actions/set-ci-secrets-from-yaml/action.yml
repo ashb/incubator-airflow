@@ -27,8 +27,9 @@ runs:
   image: 'docker://local/airflow:master-python3.6-ci'
   env:
     GPG_PRIV_KEY: "${{ inputs.gpgPrivateKey }}"
-  entrypoint: ["./dev/airflow-ci-secrets", "export"]
+  entrypoint: "./dev/airflow-ci-secrets"
   args:
+    - "export"
     - "--for-github"
     - "--import-privkey-from-env"
     - "GPG_PRIV_KEY"
