@@ -83,8 +83,8 @@ jobs:
       - uses: actions/setup-python@v1
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: "Before install"
-        run: ./scripts/ci/ci_before_install.sh
+      - name: "Build CI image"
+        run: ./scripts/ci/ci_prepare_image_on_ci.sh
       - uses: ./.github/actions/set-ci-secrets-from-yaml
         with:
           gpgPrivateKey: ${{ secrets.secretsGpgPrivKey }}
