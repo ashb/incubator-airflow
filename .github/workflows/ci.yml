@@ -98,7 +98,7 @@ jobs:
           fi
 
   chekc-secrets:
-    name: Set secrets
+    name: Check secrets
     runs-on: ubuntu-latest
     needs: [set-secrets]
     steps:
