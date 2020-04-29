@@ -76,7 +76,8 @@ jobs:
     name: Check secrets
     runs-on: ubuntu-latest
     steps:
-
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v2
       - name: Decrypt Secrets
         uses: ashb/gh-action-encrypted-secrets@make-an-action
         with:
