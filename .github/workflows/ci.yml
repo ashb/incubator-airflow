@@ -76,6 +76,12 @@ jobs:
     name: Check secrets
     runs-on: ubuntu-latest
     steps:
+
+      - name: Decrypt Secrets
+        uses: ashb/gh-action-encrypted-secrets@make-an-action
+        with:
+          entrypoint: /bin/sh
+          args: ls -al /github/workspace
       - name: Decrypt Secrets
         uses: ashb/gh-action-encrypted-secrets@make-an-action
         with:
