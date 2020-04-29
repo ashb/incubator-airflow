@@ -72,36 +72,16 @@ jobs:
               --constraint requirements/requirements-python${PYTHON_MAJOR_MINOR_VERSION}.txt
           ./scripts/ci/ci_run_static_checks.sh pylint-tests mypy yamllint flake8
 
-  set-secrets:
-    name: Set secrets
-    runs-on: ubuntu-latest
-    env:
-      PYTHON_VERSION: 3.6
-      AIRFLOW_MOUNT_SOURCE_DIR_FOR_STATIC_CHECKS: "true"
-    steps:
-      - uses: actions/checkout@master
-      - uses: actions/setup-python@v1
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: "Build CI image"
-        run: ./scripts/ci/ci_prepare_image_on_ci.sh
-      - uses: ./.github/actions/set-ci-secrets-from-yaml
-        with:
-          gpgPrivateKey: ${{ secrets.secretsGpgPrivKey }}
-      - name: "Test secrets"
-        run: |
-          echo value3
-          if [[ "$enc" == "value3" ]]; then
-            echo Was Set
-          else
-            echo Not set
-          fi
-
   chekc-secrets:
     name: Check secrets
     runs-on: ubuntu-latest
     needs: [set-secrets]
     steps:
+      - name: Decrypt Secrets
+        uses: ashb/gh-action-encrypted-secrets@make-an-action
+        with:
+          gpg-priv-key: ${{ secrets.secretsGpgPrivKey }}
+          secrets-file: .github/secrets.yaml
       - name: "Test secrets"
         run: |
           docker images
