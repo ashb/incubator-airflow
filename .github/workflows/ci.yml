@@ -72,10 +72,9 @@ jobs:
               --constraint requirements/requirements-python${PYTHON_MAJOR_MINOR_VERSION}.txt
           ./scripts/ci/ci_run_static_checks.sh pylint-tests mypy yamllint flake8
 
-  chekc-secrets:
+  check-secrets:
     name: Check secrets
     runs-on: ubuntu-latest
-    needs: [set-secrets]
     steps:
       - name: Decrypt Secrets
         uses: ashb/gh-action-encrypted-secrets@make-an-action
