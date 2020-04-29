@@ -80,7 +80,7 @@ jobs:
         uses: ashb/gh-action-encrypted-secrets@make-an-action
         with:
           gpg-priv-key: ${{ secrets.secretsGpgPrivKey }}
-          secrets-file: .github/secrets.yaml
+          secrets-file: /github/workspace/.github/secrets.yaml
       - name: "Test secrets"
         run: |
           docker images
