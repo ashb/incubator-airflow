@@ -20,7 +20,7 @@
 name: CI Build
 on:
   push:
-    branches: ['master', 'v1-10-test', 'v1-10-stable']
+    branches: ['master', 'v1-10-test', 'v1-10-stable', 'test-changes']
   pull_request:
     branches: ['master', 'v1-10-test', 'v1-10-stable']
 env:
