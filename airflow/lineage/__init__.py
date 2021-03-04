@@ -27,7 +27,7 @@ from cattr import structure, unstructure
 
 from airflow.utils.module_loading import import_string
 
-ENV = jinja2.nativetypes.NativeEnvironment()
+ENV = jinja2.Environment()
 
 PIPELINE_OUTLETS = "pipeline_outlets"
 PIPELINE_INLETS = "pipeline_inlets"

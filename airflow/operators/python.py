@@ -520,6 +520,7 @@ class PythonVirtualenvOperator(PythonOperator):
                     python_callable_source=dedent(inspect.getsource(self.python_callable)),
                 ),
                 filename=script_filename,
+                render_template_as_native_obj=self.dag.render_template_as_native_obj,
             )
 
             execute_in_subprocess(
