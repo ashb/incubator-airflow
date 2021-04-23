@@ -18,9 +18,9 @@
 ---
 name: "Build Images"
 on:  # yamllint disable-line rule:truthy
-  workflow_run:
-    workflows: ["CI Build"]
-    types: ['requested']
+  pull_request_target:
+  push:
+    branches: ['main', 'master', 'v1-10-test', 'v1-10-stable', 'v2-0-test']
 env:
   MOUNT_SELECTED_LOCAL_SOURCES: "false"
   FORCE_ANSWER_TO_QUESTIONS: "yes"
@@ -72,6 +72,12 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
+      - name: Show GH context
+        run: |
+          echo "$GITHUB_CONTEXT"
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+
       - name: "Get information about the original trigger of the run"
         uses: ./.github/actions/get-workflow-origin
         id: source-run-info
